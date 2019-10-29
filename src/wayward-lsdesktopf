@@ -1,0 +1,8 @@
+#!/bin/sh
+
+
+mkdir -p $HOME/.cache
+
+ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p' > $HOME/.cache/wayward-menus
+
+#exit;

@@ -5,7 +5,7 @@ Fast GTK shell and compositor for wayland and weston.
 ----
 Screenshot
 
-![screenshot] (screenshot.png)
+![screenshot] (/screenshot.png)
 
 ----
 ## installation

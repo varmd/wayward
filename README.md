@@ -5,13 +5,14 @@ Fast GTK shell and compositor for wayland and weston.
 ----
 Screenshot
 
-![screenshot] (/screenshot.png)
+![screenshot] (https://raw.githubusercontent.com/varmd/wayward/master/screenshot.png)
 
 ----
-## installation
+## Installation
 
-Download repository, extract and makepkg, then pacman -U
-Add weston to ~/.bash_profile or /etc/profile.d/. Relogin
+* Download repository, extract and makepkg, then pacman -U
+* Add weston to ~/.bash_profile or /etc/profile.d/weston.sh. Relogin
+
 For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
   yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff

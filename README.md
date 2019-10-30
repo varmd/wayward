@@ -3,7 +3,7 @@
 Fast GTK shell and compositor for wayland and weston.
 
 ----
-Screenshot
+## Screenshot
 
 ![screenshot](https://raw.githubusercontent.com/varmd/wayward/master/screenshot.png "Screenshot")
 
@@ -24,6 +24,7 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 * wayland
 * ttf-droid
 * sudo
+* gtk
 
 ----
 ## Keyboard shortcuts

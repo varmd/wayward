@@ -1,7 +1,8 @@
+# Maintainer: 
 pkgname=wayward
 pkgver=r6
-pkgrel=2
-pkgdesc="Lightweight desktop environment for Weston compositor and Wayland"
+pkgrel=4
+pkgdesc="Lightweight desktop environment based on Weston compositor for use with Wayland"
 arch=('x86_64')
 url="https://github.com/raspberrypi/wayward"
 license=('custom:MIT' 'GPL')

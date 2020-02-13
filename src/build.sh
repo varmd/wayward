@@ -62,7 +62,6 @@ SOURCES="\
 	../gen/shell-helper-protocol.c"
 
 #gcc
-#ccache can only cache one file per compilation
 
 #generate resource
 ## gresource for css
@@ -74,11 +73,11 @@ glib-compile-resources wayward.gresource.xml --target=wayward-resources.h --sour
 #	$(AM_V_GEN) glib-compile-resources --target=$@ --sourcedir=$(srcdir) --generate-header --c-name wayward $<
 
 
-gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS} ${SOURCES} ${GTK_LIBS} -lm -o wayward
+gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS} ${SOURCES} ${GTK_LIBS} -lm  -o wayward
 
 
 
-gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-8 -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
+gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-8 -lweston-desktop-8 -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
 
 #/usr/bin/install -c 
 

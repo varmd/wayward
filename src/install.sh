@@ -18,6 +18,8 @@ chmod +x "$1/usr/lib/weston/wayward-lsdesktopf"
 #clean up
 rm -rf shell/wayward
 rm -rf shell/shell_helper.so
+rm -rf shell/wayward-resources.c
+rm -rf shell/wayward-resources.h
 rm -rf gen
 
 #make

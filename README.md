@@ -16,6 +16,7 @@ Fast GTK shell and compositor for wayland and weston.
 For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
   yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff
+  
   yourusername ALL = NOPASSWD: /usr/bin/systemctl reboot
 
 **Requirements**

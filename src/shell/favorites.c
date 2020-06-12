@@ -40,7 +40,7 @@ struct WaywardFavoritesPrivate {
   GSettings *settings;
 };
 
-G_DEFINE_TYPE(WaywardFavorites, wayward_favorites, GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE(WaywardFavorites, wayward_favorites, GTK_TYPE_BOX)
 
 static void
 favorite_clicked (GtkButton *button,
@@ -127,9 +127,8 @@ static void
 wayward_favorites_init (WaywardFavorites *self)
 {
   
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-                                            WAYWARD_TYPE_FAVORITES,
-                                            WaywardFavoritesPrivate);
+  self->priv = wayward_favorites_get_instance_private (self);
+
 
   self->priv->settings = g_settings_new ("org.weston.wayward");
   g_signal_connect (self->priv->settings, "changed::favorites",

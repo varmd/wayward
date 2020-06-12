@@ -35,7 +35,7 @@ struct WaywardVerticalClockPrivate {
   //GnomeWallClock *wall_clock;
 };
 
-G_DEFINE_TYPE(WaywardVerticalClock, wayward_vertical_clock, GTK_TYPE_BOX)
+G_DEFINE_TYPE_WITH_PRIVATE(WaywardVerticalClock, wayward_vertical_clock, GTK_TYPE_BOX)
 
 /* this widget takes up the entire width of the panel and displays
  * padding for the first (panel width - vertical clock width) pixels,
@@ -45,9 +45,7 @@ G_DEFINE_TYPE(WaywardVerticalClock, wayward_vertical_clock, GTK_TYPE_BOX)
 static void
 wayward_vertical_clock_init (WaywardVerticalClock *self)
 {
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      WAYWARD_VERTICAL_CLOCK_TYPE,
-      WaywardVerticalClockPrivate);
+  self->priv = wayward_vertical_clock_get_instance_private (self);
 }
 
 static void

@@ -58,7 +58,7 @@ struct WaywardLauncherPrivate {
   GtkWidget *grid;
 };
 
-G_DEFINE_TYPE(WaywardLauncher, wayward_launcher, GTK_TYPE_WINDOW)
+G_DEFINE_TYPE_WITH_PRIVATE(WaywardLauncher, wayward_launcher, GTK_TYPE_WINDOW)
 
 /* each grid item is 114x114 */
 #define GRID_ITEM_WIDTH 134
@@ -67,9 +67,8 @@ G_DEFINE_TYPE(WaywardLauncher, wayward_launcher, GTK_TYPE_WINDOW)
 static void
 wayward_launcher_init (WaywardLauncher *self)
 {
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      WAYWARD_LAUNCHER_TYPE,
-      WaywardLauncherPrivate);
+  self->priv = wayward_launcher_get_instance_private (self);
+  
 }
 
 static gint

@@ -52,14 +52,12 @@ struct WaywardClockPrivate {
   glong min_volume, max_volume;
 };
 
-G_DEFINE_TYPE(WaywardClock, wayward_clock, GTK_TYPE_WINDOW)
+G_DEFINE_TYPE_WITH_PRIVATE(WaywardClock, wayward_clock, GTK_TYPE_WINDOW)
 
 static void
 wayward_clock_init (WaywardClock *self)
 {
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      WAYWARD_CLOCK_TYPE,
-      WaywardClockPrivate);
+  self->priv = wayward_clock_get_instance_private (self);
 }
 
 static gdouble

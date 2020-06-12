@@ -54,8 +54,8 @@
 
 #include <libweston/libweston.h>
 
-#define WAYWARD_WARM_HOUR_START 19
-#define WAYWARD_WARM_HOUR_END 9
+#define WAYWARD_WARM_HOUR_START 21
+#define WAYWARD_WARM_HOUR_END 6
 
 
 //keyboard
@@ -138,13 +138,6 @@ clock_window_leave_cb (GtkWidget *widget,
     GdkEventCrossing *event,
     struct desktop *desktop)
 {
-  
-  /*
-  FILE *f;
-      f = fopen("/tmp/x.log", "a+");
-      fprintf(f, "clock panel leave called  \n");
-      fclose(f);
-  */
   desktop->pointer_on_clock=0;
   panel_window_leave_cb(widget, event, desktop);
 }
@@ -625,8 +618,7 @@ leave_panel_idle_cb (gpointer data)
   
   //window_height = height * WAYWARD_PANEL_HEIGHT_RATIO;
   gint window_height = 50;
-  //gtk_window_resize (GTK_WINDOW (desktop->panel->window),
-  //    WAYWARD_PANEL_WIDTH, window_height);
+
   
   shell_helper_move_surface (desktop->helper, desktop->panel->surface,
       -1, desktop_height - 4 );
@@ -855,22 +847,11 @@ panel_create (struct desktop *desktop)
 
 
   panel->surface = gdk_wayland_window_get_wl_surface (gdk_window);
-  /*
-  if (desktop->shell)
-    {
-      desktop_shell_set_user_data (desktop->shell, desktop);
-      desktop_shell_set_panel (desktop->shell, desktop->output, panel->surface);
-      desktop_shell_set_panel_position (desktop->shell,
-	  DESKTOP_SHELL_PANEL_POSITION_RIGHT);
-    }
-  else
-  if
-    {
-  */    
-      weston_desktop_shell_set_user_data (desktop->wshell, desktop);
-      weston_desktop_shell_set_panel (desktop->wshell, desktop->output,
-          panel->surface);
-      weston_desktop_shell_set_panel_position (desktop->wshell,
+  
+  weston_desktop_shell_set_user_data (desktop->wshell, desktop);
+  weston_desktop_shell_set_panel (desktop->wshell, desktop->output, 
+    panel->surface);
+  weston_desktop_shell_set_panel_position (desktop->wshell,
 	  WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM);
     //}
   //  
@@ -1046,85 +1027,10 @@ css_setup (struct desktop *desktop)
   g_object_unref (file);
 }
 
-/*
-static void
-pointer_handle_enter (void *data,
-    struct wl_pointer *pointer,
-    uint32_t serial,
-    struct wl_surface *surface,
-    wl_fixed_t sx_w,
-    wl_fixed_t sy_w)
-{
-}
-
-static void
-pointer_handle_leave (void *data,
-    struct wl_pointer *pointer,
-    uint32_t serial,
-    struct wl_surface *surface)
-{
-}
-
-static void
-pointer_handle_motion (void *data,
-    struct wl_pointer *pointer,
-    uint32_t time,
-    wl_fixed_t sx_w,
-    wl_fixed_t sy_w)
-{
-}
-
-static void
-pointer_handle_button (void *data,
-    struct wl_pointer *pointer,
-    uint32_t serial,
-    uint32_t time,
-    uint32_t button,
-    uint32_t state_w)
-{
-  struct desktop *desktop = data;
-
-  if (state_w != WL_POINTER_BUTTON_STATE_RELEASED)
-    return;
-
-  if (!desktop->pointer_out_of_panel)
-    return;
-
-  if (desktop->grid_visible)
-    launcher_grid_toggle (desktop->launcher_grid->window, desktop);
-
-  panel_window_leave_cb (NULL, NULL, desktop);
-}
-
-static void
-pointer_handle_axis (void *data,
-    struct wl_pointer *pointer,
-    uint32_t time,
-    uint32_t axis,
-    wl_fixed_t value)
-{
-}
-
-static const struct wl_pointer_listener pointer_listener = {
-  pointer_handle_enter,
-  pointer_handle_leave,
-  pointer_handle_motion,
-  pointer_handle_button,
-  pointer_handle_axis,
-};
-
-*/
 
 /* Keyboard */
 
 static void keyboard_keymap (void *data, struct wl_keyboard *keyboard, uint32_t format, int32_t fd, uint32_t size) {
-/*
-        char *keymap_string = mmap (NULL, size, PROT_READ, MAP_SHARED, fd, 0);
-	keymap = xkb_keymap_new_from_string (xkb_context, keymap_string, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
-	munmap (keymap_string, size);
-	xkb_state_unref (xkb_state);
-	xkb_state = xkb_state_new (keymap);
-*/
 
 }
 
@@ -1196,7 +1102,7 @@ static void keyboard_key (void *data, struct wl_keyboard *keyboard, uint32_t ser
 				fprintf (f, "the key %c was pressed\n", (char)utf32);
 				if (utf32 == 'f') {
                                         
-                                       fprintf (f, "ewfewfwf\n");
+                                       
                                 };
 			}
 			else {
@@ -1377,8 +1283,6 @@ grab_surface_create(struct desktop *desktop)
 }
 
 
-//g_timeout_add_seconds (2, panel_hide_timeout_cb, desktop);
-
 
 static gboolean check_gamma(gpointer data) {
   struct desktop *desktop = data;
@@ -1499,8 +1403,11 @@ main (int argc,
   grab_surface_create(desktop);
 
   //Add gamma check timeout
+  //TODO fix warm.dat
+  #if 0
   g_timeout_add_seconds (120, check_gamma, desktop);  
   check_gamma(desktop);
+  #endif
 
   if(!desktop->panel->surface) {
     exit(1);

@@ -3,20 +3,18 @@
 Fast GTK shell and compositor for wayland and weston.
 
 ----
-## Screenshot
+Screenshot
 
-![screenshot](https://raw.githubusercontent.com/varmd/wayward/master/screenshot.png "Screenshot")
+![screenshot] (screenshot.png)
 
 ----
-## Installation
+## installation
 
-* Download repository, extract and makepkg, then pacman -U
-* Add weston to ~/.bash_profile or /etc/profile.d/weston.sh. Relogin
-
+Download repository, extract and makepkg, then pacman -U
+Add weston to ~/.bash_profile or /etc/profile.d/. Relogin
 For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
   yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff
-  
   yourusername ALL = NOPASSWD: /usr/bin/systemctl reboot
 
 **Requirements**
@@ -25,12 +23,12 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 * wayland
 * ttf-droid
 * sudo
-* gtk
 
 ----
 ## Keyboard shortcuts
 
-* Super+a - See list of open applications. Use cursor or mouse to select
+* Super+a - See list of open applications. Use cursor or mouse to select. Press q
+  to close an open app, right click to close an open app
 * Super+f - Open app launcher
 
 ----

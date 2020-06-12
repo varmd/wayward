@@ -52,14 +52,13 @@ struct WaywardPanelPrivate {
   gchar *volume_icon_name;
 };
 
-G_DEFINE_TYPE(WaywardPanel, wayward_panel, GTK_TYPE_WINDOW)
+G_DEFINE_TYPE_WITH_PRIVATE(WaywardPanel, wayward_panel, GTK_TYPE_WINDOW)
 
 static void
 wayward_panel_init (WaywardPanel *self)
 {
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      WAYWARD_PANEL_TYPE,
-      WaywardPanelPrivate);
+  //self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, WAYWARD_PANEL_TYPE,      WaywardPanelPrivate);
+  self->priv = wayward_panel_get_instance_private(self);
 
   self->priv->volume_icon_name = g_strdup ("audio-volume-high-symbolic");
 }

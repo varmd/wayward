@@ -2,7 +2,7 @@
 <schemalist>
   <schema path="/org/weston/wayward/" id="org.weston.wayward" gettext-domain="wayward">
     <key type="as" name="favorites">
-      <default>[ 'firefox.desktop', 'vestigo.desktop' ]</default>
+      <default>[ 'quickbrowser.desktop', 'firefox.desktop', 'vestigo.desktop' ]</default>
       <summary>List of desktop file IDs for favorite applications</summary>
       <description>The applications corresponding to these identifiers will be displayed in the panel.</description>
     </key>

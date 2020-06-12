@@ -1,17 +1,17 @@
-# Maintainer: 
 pkgname=wayward
 pkgver=r6
-pkgrel=4
-pkgdesc="Lightweight desktop environment based on Weston compositor for use with Wayland"
+pkgrel=12
+pkgdesc="Lightweight desktop environment based on Weston compositor and GTK on  Wayland"
 arch=('x86_64')
-url="https://github.com/raspberrypi/wayward"
-license=('custom:MIT' 'GPL')
+url="https://github.com/varmd/wayward"
+
+license=('GPL')
 provides=("wayward")
 depends=("weston")
 
 makedepends=( "fakeroot" "gcc")
 install=wayward.install
-#source=("")
+
 
 prepare() {
 	cd "$srcdir/"

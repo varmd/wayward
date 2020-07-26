@@ -1,26 +1,23 @@
-# wayward - wayland compositor for weston
-
-Fast GTK shell and compositor for wayland and weston.
+# wayward - fast shell for wayland and weston
 
 ----
-Screenshot
+## Screenshot
 
 ![screenshot](https://raw.githubusercontent.com/varmd/wayward/master/screenshot.png "Screenshot")
 
 ----
-## installation
+## Installation
 
 Download repository, extract and makepkg, then pacman -U
 Add weston to ~/.bash_profile or /etc/profile.d/. Relogin
 For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
-  yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff
-  yourusername ALL = NOPASSWD: /usr/bin/systemctl reboot
+    yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff
+    yourusername ALL = NOPASSWD: /usr/bin/systemctl reboot
 
 **Requirements**
 
-* weston
-* wayland
+* weston and wayland
 * ttf-droid
 * sudo
 
@@ -31,11 +28,15 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
   to close an open app, right click to close an open app
 * Super+f - Open app launcher
 
+## Changing wallpaper
+
+Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checked every 30 seconds for changes. Removing ~/.config/wayward-wallpaper.jpg will remove the wallpaper.
+
 ----
 ## Known issues and limitations
 
 * No multimonitor support
-* Need to restart program after new app installation
+* Need to restart wayward after a new app installation to see the app in the app list.
 
 
 

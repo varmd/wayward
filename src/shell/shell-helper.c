@@ -123,6 +123,7 @@ struct exposay {
 	struct weston_seat *seat;
 
 	struct wl_list surface_list;
+	
 
 	struct weston_keyboard_grab grab_kbd;
 	struct weston_pointer_grab grab_ptr;
@@ -190,6 +191,7 @@ struct shell_output {
 
 
 struct weston_desktop;
+
 struct desktop_shell {
 	struct weston_compositor *compositor;
 	struct weston_desktop *desktop;
@@ -331,6 +333,7 @@ struct weston_keyboard *panel_keyboard;
 
 
 struct desktop_shell *global_desktop_shell;
+struct wl_array global_minimized_array;
 
 struct shell_helper {
 	struct weston_compositor *compositor;
@@ -1674,12 +1677,18 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 	int last_row_removed = 0;
 
   struct weston_view *tmp;
-	
+  
+	struct weston_view **minimized;
+  
+  printf("Listing surfaces ... \n");
+  
 	wl_list_for_each_safe(view, tmp, &shell->minimized_layer.view_list.link, layer_link.link) {
 		weston_layer_entry_remove(&view->layer_link);
 		weston_layer_entry_insert(&workspace->layer.view_list, &view->layer_link);
-		//minimized = wl_array_add(&switcher->minimized_array, sizeof *minimized);
-		//*minimized = view;
+    
+    printf("Listing surfaces ... 22 \n");
+		minimized = wl_array_add(&global_minimized_array, sizeof *minimized);
+		*minimized = view;
 	}
 
 
@@ -2091,11 +2100,12 @@ exposay_transition_inactive(struct desktop_shell *shell, int switch_focus)
 {
 	struct exposay_surface *esurface;
   struct exposay_surface *tmp;
-
+  struct weston_view *current_view = NULL;
 
   printf("Clearing surfaces \n");
   
 	if (switch_focus && shell->exposay.focus_current != NULL) {               
+    current_view = shell->exposay.focus_current->view;
 		exposay_activate(shell);
   }
 
@@ -2107,6 +2117,23 @@ exposay_transition_inactive(struct desktop_shell *shell, int switch_focus)
   }
   
   printf("Clearing surfaces 2 \n");
+  
+  if(current_view != NULL) {
+    /* re-hide surfaces that were temporary shown during the switch */
+    
+    
+    struct weston_view **minimized;
+    wl_array_for_each(minimized, &global_minimized_array) {
+      /* with the exception of the current selected */
+      if ( (*minimized)->surface != current_view->surface) {
+        weston_layer_entry_remove(&(*minimized)->layer_link);
+        weston_layer_entry_insert(&shell->minimized_layer.view_list, &(*minimized)->layer_link);
+        weston_view_damage_below(*minimized);
+      }
+    }
+  }
+	wl_array_release(&global_minimized_array);
+  
         
 	weston_compositor_schedule_repaint(shell->compositor);
   
@@ -2141,6 +2168,7 @@ exposay_transition_active(struct desktop_shell *shell)
 
 	shell->exposay.clicked = NULL;
 	wl_list_init(&shell->exposay.surface_list);
+  wl_array_init(&global_minimized_array);
 
 	
   lower_fullscreen_layer(shell, NULL);

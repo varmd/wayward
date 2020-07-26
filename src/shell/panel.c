@@ -128,8 +128,6 @@ inhibit_button_clicked_cb (GtkButton *button,
   
   g_signal_emit (self, signals[INHIBIT_TOGGLED], 0);
   
-  
-  
   if(!inhibit_state) {
     
     inhibit_state = 1;

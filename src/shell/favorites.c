@@ -75,8 +75,14 @@ add_favorite (WaywardFavorites *self,
     return;
 
   icon = g_app_info_get_icon (G_APP_INFO (info));
+  
+  image = gtk_image_new_from_gicon (icon, GTK_ICON_SIZE_DIALOG);
+  
+  button = g_object_new (WAYWARD_APP_ICON_TYPE,
+      "image", image,
+      NULL);
 
-  button = wayward_app_icon_new_from_gicon (icon);
+  //button = wayward_app_icon_new_from_gicon (icon);
 
   g_object_set_data_full (G_OBJECT (button), "info", info, g_object_unref);
 

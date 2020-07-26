@@ -189,13 +189,7 @@ ebox_key_released_cb (GtkWidget *widget,
 
   if (event->keyval && event->keyval == GDK_KEY_ISO_Enter)
   {
-    
-  
-
-        ebox_clicked_cb(widget, NULL, info);
-
-
-
+    ebox_clicked_cb(widget, NULL, info);
   }
 }
 

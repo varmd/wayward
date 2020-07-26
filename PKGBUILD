@@ -1,6 +1,6 @@
 pkgname=wayward
-pkgver=r6
-pkgrel=12
+pkgver=r7
+pkgrel=2
 pkgdesc="Lightweight desktop environment based on Weston compositor and GTK on  Wayland"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"

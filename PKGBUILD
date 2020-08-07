@@ -7,7 +7,7 @@ url="https://github.com/varmd/wayward"
 
 license=('GPL')
 provides=("wayward")
-depends=("weston")
+depends=("weston" "gtk3")
 
 makedepends=( "fakeroot" "gcc")
 install=wayward.install

@@ -1,7 +1,7 @@
 pkgname=wayward
-pkgver=r7
-pkgrel=2
-pkgdesc="Lightweight desktop environment based on Weston compositor and GTK on  Wayland"
+pkgver=0.7.1
+pkgrel=3
+pkgdesc="wayward - fast shell for wayland and weston"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"
 

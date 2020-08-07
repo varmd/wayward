@@ -14,17 +14,18 @@ install=wayward.install
 
 
 prepare() {
-	cd "$srcdir/"
+  cd "$srcdir/"
+  cp -r ../source .
 }
 
 build() {
-	cd "$srcdir/"
+	cd "$srcdir/source"
 	sh build.sh
 }
 
 package() {
-	cd "$srcdir/"
-        echo $pkgdir
+	cd "$srcdir/source"
+
 	sh install.sh $pkgdir
           
 }

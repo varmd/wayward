@@ -1,4 +1,4 @@
-# wayward - fast shell for wayland and weston
+# wayward - fast desktop shell for wayland and weston
 
 ----
 ## Screenshot
@@ -18,7 +18,8 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 **Requirements**
 
 * weston and wayland
-* ttf-droid
+* ttf-droid and adwaita-icon-theme
+* gtk3
 * sudo
 
 ----
@@ -36,7 +37,7 @@ Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checke
 ## Known issues and limitations
 
 * No multimonitor support
-* Need to restart wayward after a new app installation to see the app in the app list.
+* Need to restart wayward after a new app installation to see the app in the app launcher.
 
 
 

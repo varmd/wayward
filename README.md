@@ -10,7 +10,7 @@
 
 You can download a precompiled package from https://github.com/varmd/wayward/releases. This version is automatically built via Github Actions. cd to download folder and install
 
-   pacman -U wayward*pkg*
+    pacman -U wayward*pkg*
 
 ## Installation
 

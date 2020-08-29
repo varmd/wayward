@@ -39,7 +39,7 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
 Use gsettings to modify and restart the program. E.g.
 
-   gsettings set org.weston.wayward favorites "['mpv.desktop', 'firefox.desktop']"
+    gsettings set org.weston.wayward favorites "['mpv.desktop', 'firefox.desktop']"
 
 ## Changing wallpaper
 

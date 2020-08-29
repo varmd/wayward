@@ -14,8 +14,22 @@ You can download a precompiled package from https://github.com/varmd/wayward/rel
 
 ## Installation
 
-Download repository, extract and makepkg, then pacman -U
-Add weston to ~/.bash_profile or /etc/profile.d/. Relogin
+Download repository, extract and makepkg, then 
+
+    pacman -U wayward*pkg*
+
+## Configuration
+
+Add weston to ~/.bash_profile or /etc/profile.d/weston.sh
+
+    echo "weston" >> ~/.bash_profile
+    
+Or 
+    echo "weston" > /etc/profile.d/weston.sh
+
+Wayward installs its own configuration for weston in /etc/profile.d/weston.ini so rename or remove any existing weston configuration - e.g at ~/.config/weston.ini.  Relogin.
+
+
 For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
     yourusername ALL = NOPASSWD: /usr/bin/systemctl poweroff

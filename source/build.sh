@@ -19,7 +19,7 @@ GTK_CFLAGS="-std=c11 -pthread -I/usr/include/gio-unix-2.0/ -I/usr/lib/glib-2.0/i
 -I/usr/include/harfbuzz \
 -I/usr/include/gsettings-desktop-schemas \
 -I/usr/include/pixman-1 \
--I/usr/include/libweston-8 \
+-I/usr/include/libweston-9 \
 -I/usr/include/
 "
 
@@ -77,7 +77,7 @@ gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS} ${SOURCES} ${GTK_LIBS} -lm  -
 
 
 
-gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-8 -lweston-desktop-8 -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
+gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-9 -lweston-desktop-9 -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
 
 #/usr/bin/install -c 
 

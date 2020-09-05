@@ -80,8 +80,6 @@ struct exposay_output {
 	int grid_size;
 	int surface_size;
 
-	int hpadding_outer;
-	int vpadding_outer;
 	int padding_inner;
 };
 
@@ -349,6 +347,8 @@ struct shell_helper {
 
 	struct wl_list slide_list;
 };
+
+
 
 //end copied
 
@@ -1667,7 +1667,8 @@ handle_view_destroy(struct wl_listener *listener, void *data)
 static enum exposay_layout_state
 exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 {
-	struct workspace *workspace = shell->exposay.workspace;
+	//struct workspace *workspace = shell->exposay.workspace;
+  struct workspace *workspace = get_current_workspace(shell);
 	struct weston_output *output = shell_output->output;
 	struct exposay_output *eoutput = &shell_output->eoutput;
 	struct weston_view *view;
@@ -1675,11 +1676,15 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 	int w, h;
 	int i;
 	int last_row_removed = 0;
+  
+  int hpadding_outer = 0;
+  int vpadding_outer = 0;
 
   struct weston_view *tmp;
   
 	struct weston_view **minimized;
   
+  printf("%p workspace \n", workspace);
   printf("Listing surfaces ... \n");
   
 	wl_list_for_each_safe(view, tmp, &shell->minimized_layer.view_list.link, layer_link.link) {
@@ -1695,8 +1700,19 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 
 	eoutput->num_surfaces = 0;
 	wl_list_for_each(view, &workspace->layer.view_list.link, layer_link.link) {
+    printf("surface found before ... ");
 		if (!is_shell_surface(view->surface))
 			continue;
+    
+    #if 0
+    printf("view output name %s %p \n", view->output->name, view->output);
+    printf("output name %s %p \n", output->name, output);
+    
+    if (view->output != output) {
+      printf("view output %p %p \n", view->output, output);  
+    }
+    #endif
+    
 		if (view->output != output)
 			continue;
 		eoutput->num_surfaces++;
@@ -1706,8 +1722,6 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 
 	if (eoutput->num_surfaces == 0) {
 		eoutput->grid_size = 0;
-		eoutput->hpadding_outer = 0;
-		eoutput->vpadding_outer = 0;
 		eoutput->padding_inner = 0;
 		eoutput->surface_size = 0;
 		return EXPOSAY_LAYOUT_OVERVIEW;
@@ -1737,15 +1751,17 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 
 
 
-	eoutput->hpadding_outer = (output->width / 20);
-	eoutput->vpadding_outer = (output->height / 20);
+	hpadding_outer = (output->width / 20);
+	vpadding_outer = (output->height / 20);
 	eoutput->padding_inner = 70;
 
-	w = output->width - (eoutput->hpadding_outer * 2.5);
+	//w = output->width - (eoutput->hpadding_outer * 2.5);
+	w = output->width - hpadding_outer * 2.5;
 	w -= eoutput->padding_inner * (eoutput->grid_size - 1);
 	w /= eoutput->grid_size;
 
-	h = output->height - (eoutput->vpadding_outer * 2.5);
+	//h = output->height - (eoutput->vpadding_outer * 2.5);
+	h = output->height- vpadding_outer * 2.5;
 	h -= eoutput->padding_inner * (eoutput->grid_size - 1);
 	h /= eoutput->grid_size;
 
@@ -1772,7 +1788,7 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 		if (!is_shell_surface(view->surface))
 			continue;
     
-		if (view->output != output)
+    if (view->output != output)
 			continue;
 
 		esurface = malloc(sizeof(*esurface));
@@ -1792,9 +1808,11 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 		esurface->row = i / eoutput->grid_size;
 		esurface->column = i % eoutput->grid_size;
 
-		esurface->x = output->x + eoutput->hpadding_outer;
+		//esurface->x = output->x + eoutput->hpadding_outer;
+		esurface->x = output->x + hpadding_outer;
 		esurface->x += pad * esurface->column;
-		esurface->y = output->y + eoutput->vpadding_outer;
+		//esurface->y = output->y + eoutput->vpadding_outer;
+		esurface->y = output->y + vpadding_outer;
 		esurface->y += pad * esurface->row;
 
 		if (esurface->row == (eoutput->grid_size) )
@@ -2199,6 +2217,7 @@ exposay_transition_active(struct desktop_shell *shell)
 	wl_list_for_each(shell_output, &shell->output_list, link) {
 		enum exposay_layout_state state;
 
+    //printf("output name %s \n", shell_output->name);
 		//state = 
     exposay_layout(shell, shell_output);
     

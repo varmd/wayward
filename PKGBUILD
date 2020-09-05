@@ -1,6 +1,6 @@
 pkgname=wayward
-pkgver=0.7.1
-pkgrel=4
+pkgver=0.7.2
+pkgrel=1
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"
@@ -14,6 +14,7 @@ makedepends=( "fakeroot" "gcc")
 
 prepare() {
   cd "$srcdir/"
+  rm -rf $srcdir/source
   cp -r ../source .
 }
 

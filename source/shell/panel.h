@@ -36,6 +36,9 @@ typedef struct WaywardPanel WaywardPanel;
 typedef struct WaywardPanelClass WaywardPanelClass;
 typedef struct WaywardPanelPrivate WaywardPanelPrivate;
 
+extern int global_battery_exists;
+extern char global_battery_path[PATH_MAX];
+
 struct WaywardPanel
 {
   GtkWindow parent;

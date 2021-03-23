@@ -326,7 +326,7 @@ wayward_clock_constructed (GObject *object)
 
   //self->priv->wall_clock = g_object_new (GNOME_TYPE_WALL_CLOCK, NULL);
   //g_signal_connect (self->priv->wall_clock, "notify::clock", G_CALLBACK (wall_clock_notify_cb), self);
-  g_timeout_add (5000, G_SOURCE_FUNC(wall_clock_notify_cb), self);
+  g_timeout_add_seconds (10, G_SOURCE_FUNC(wall_clock_notify_cb), self);
 
   gtk_window_set_title (GTK_WINDOW (self), "wayward");
   gtk_window_set_decorated (GTK_WINDOW (self), FALSE);

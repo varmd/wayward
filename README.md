@@ -59,6 +59,10 @@ Use gsettings to modify and restart the program. E.g.
 
 Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checked every 30 seconds for changes. Removing ~/.config/wayward-wallpaper.jpg will remove the wallpaper.
 
+## Changelog
+
+0.8 - Add battery indicator
+
 ----
 ## Known issues and limitations
 

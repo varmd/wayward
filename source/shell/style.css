@@ -198,4 +198,15 @@ border-image: none;
         background: black;
 }
 
+.wayward-battery-label {
+  border-style: none;
+  border-width: 0px;
+  border-radius: 0px;
+  background: black;
+  color: white;
+  padding-top: 5px;
+  padding-right: 5px;
+  font-size: 16px;
+  font-family: Droid Sans;
+} 
 

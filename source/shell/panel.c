@@ -50,6 +50,8 @@ struct WaywardPanelPrivate {
   gboolean volume_showing;
   GtkWidget *volume_button;
   gchar *volume_icon_name;
+  
+  GtkWidget *battery_label;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE(WaywardPanel, wayward_panel, GTK_TYPE_WINDOW)
@@ -145,6 +147,33 @@ inhibit_button_clicked_cb (GtkButton *button,
     gtk_style_context_remove_class (gtk_widget_get_style_context (GTK_WIDGET(button)),
       "wayward-idle-active");
   }
+}
+
+static int
+panel_update_battery_cb ( WaywardPanel *self)
+{
+  
+  
+  
+   FILE *fp;
+   char buff[10] = {'\0'};
+
+   fp = fopen(global_battery_path, "r");
+   if(fp != NULL) {
+     fgets(buff, 10, (FILE*)fp);   
+     fclose(fp);
+  
+    buff[strlen(buff) - 1] = '\0'; 
+    char temp[7];
+    //sprintf(temp, "%s%", buff);
+    sprintf(temp, "%s%%", buff);
+  
+    //gchar *battery_str = g_strdup_printf( "<span>%s%</span>", buff);
+    gtk_label_set_text (GTK_LABEL (self->priv->battery_label), temp);
+  }
+  
+  
+  return 1;
 }
 
 static void
@@ -322,7 +351,38 @@ wayward_panel_constructed (GObject *object)
 
   /* idle inhibit button */
 
-  
+  /* battery indicator */
+  if(global_battery_exists) {
+    
+    self->priv->battery_label =  gtk_label_new (NULL);
+    
+    char battery_temp[7];
+    //sprintf(temp, "%s%", buff);
+    sprintf(battery_temp, "%d%%", 100);
+    
+    gtk_style_context_add_class (gtk_widget_get_style_context (self->priv->battery_label), "wayward-battery-label");
+    gtk_widget_set_size_request(self->priv->battery_label, 50, -1);
+    gtk_label_set_single_line_mode(GTK_LABEL(self->priv->battery_label), TRUE);
+    
+    /*
+    
+    
+    gtk_label_set_width_chars(GTK_LABEL(self->priv->battery_label), 40);
+    gtk_label_set_max_width_chars(GTK_LABEL(self->priv->battery_label), 40);
+    gtk_label_set_line_wrap(GTK_LABEL(self->priv->battery_label), FALSE);
+    
+    */
+    //gtk_label_set_use_markup (GTK_LABEL (self->priv->battery_label), FALSE);
+    gtk_label_set_text (GTK_LABEL (self->priv->battery_label), battery_temp);
+    gtk_box_pack_end (GTK_BOX (main_box), self->priv->battery_label, FALSE, FALSE, 0);
+    
+    //gtk_container_add (GTK_CONTAINER ( self->priv->battery_label ), self->priv->battery_label);
+    
+    panel_update_battery_cb(self);
+    
+    g_timeout_add_seconds(300, G_SOURCE_FUNC(panel_update_battery_cb), self);
+  }
+  /* end battery indicator */
 
   
 

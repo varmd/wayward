@@ -56,10 +56,13 @@
 
 #include <libweston/libweston.h>
 
+#include <wayland-client.h>
 #include <wayland-cursor.h>
 
 #define WAYWARD_WARM_HOUR_START 21
 #define WAYWARD_WARM_HOUR_END 6
+
+#define WAYWARD_NO_MOVE_X -13371
 
 
 //keyboard
@@ -76,8 +79,10 @@ int global_wallpaper_size = 0;
 int global_wallpaper_exists = 0;
 int global_battery_exists = 0;
 int global_desktop_height = 0;
-int global_grid_width=0;
-int global_grid_height=0;
+int global_grid_width = 0;
+int global_grid_height = 0;
+int global_monitor_count = 0;
+int global_panel_monitor = 1;
 
 
 char global_battery_path[PATH_MAX] = {'\0'};
@@ -102,12 +107,28 @@ struct element {
   struct wl_surface *surface;
 };
 
+
+struct output {
+	struct wl_output *output;
+	uint32_t server_output_id;
+	struct wl_list link;
+
+	int x;
+	int y;
+	struct panel *panel;
+	struct element *background;
+};
+
 struct desktop {
   struct wl_display *display;
   struct wl_registry *registry;
   struct desktop_shell *shell;
   struct weston_desktop_shell *wshell;
+  
   struct wl_output *output;
+  
+  struct wl_list outputs;
+  
   struct shell_helper *helper;
 
   struct wl_seat *seat;
@@ -139,6 +160,20 @@ static gboolean panel_window_enter_cb (GtkWidget *widget,
 static gboolean panel_window_leave_cb (GtkWidget *widget,
     GdkEventCrossing *event, struct desktop *desktop);
 static void launcher_grid_app_launched (GtkWidget *widget, struct desktop *desktop);
+
+
+void logfile(char *fmt, ...) {
+	va_list args;
+
+  va_start(args, fmt);
+  
+  FILE *file = fopen("/tmp/x1.log", "a+");
+  vfprintf(file, fmt, args);
+  vprintf(fmt, args);
+	fclose(file);
+  
+	va_end(args);
+}
 
 
 static void
@@ -197,34 +232,20 @@ connect_enter_leave_signals (gpointer data)
 
 
 static void
-desktop_shell_prepare_lock_surface (void *data,
-    struct desktop_shell *desktop_shell)
-{
-  //desktop_shell_unlock (desktop_shell);
-}
-
-static void
 weston_desktop_shell_prepare_lock_surface (void *data,
     struct weston_desktop_shell *weston_desktop_shell)
 {
   weston_desktop_shell_unlock (weston_desktop_shell);
 }
 
-/*
-static void
-desktop_shell_grab_cursor (void *data,
-    struct desktop_shell *desktop_shell,
-    uint32_t cursor)
-{
 
-
-}*/
 
 static void
 weston_desktop_shell_grab_cursor (void *data,
     struct weston_desktop_shell *weston_desktop_shell,
     uint32_t cursor)
 {
+  
 }
 
 
@@ -243,28 +264,21 @@ launcher_grid_toggle (GtkWidget *widget,
 
   if (desktop->grid_visible)
     {
-      shell_helper_move_surface (desktop->helper, desktop->launcher_grid->surface,
-      - (global_grid_width + 100),
-      global_desktop_height - window_height - 3 * WAYWARD_CLOCK_HEIGHT - 114 );
+      
+      shell_helper_move_surface (
+        desktop->helper, 
+        desktop->launcher_grid->surface,
+        WAYWARD_NO_MOVE_X,
+        -10 * (global_desktop_height - window_height - 3 * WAYWARD_CLOCK_HEIGHT - 114 )
+      );
 
 
       //shell_helper_curtain (desktop->helper, desktop->curtain->surface, 0);
     }
   else
     {
-      //int width;
-
-      //gtk_widget_get_size_request (desktop->launcher_grid->window,
-      //    &width, NULL);
-
-      /*
-      shell_helper_slide_surface (desktop->helper,
-          desktop->launcher_grid->surface,
-          width + WAYWARD_PANEL_WIDTH, 0);
-      */
-
-
-      shell_helper_move_surface (desktop->helper, desktop->launcher_grid->surface, 0, global_desktop_height - window_height - global_grid_height + 5 );
+      
+      shell_helper_move_surface (desktop->helper, desktop->launcher_grid->surface, WAYWARD_NO_MOVE_X, global_desktop_height - window_height - global_grid_height + 5 );
 
       //shell_helper_slide_surface (desktop->helper, desktop->launcher_grid->surface, width, 0);
 
@@ -324,29 +338,27 @@ shell_configure (struct desktop *desktop,
   int window_height;
   int grid_width, grid_height;
 
-  global_desktop_height = height;
-  global_desktop_width = width;
+  logfile("shell configure %d %d \n", (int)width, (int)height);
 
   //launcher needs access to desktop width so needs to be
   // called from shell_configure
   launcher_grid_create (desktop);
 
 
-
-  gtk_widget_set_size_request (desktop->background->window, width, height);
+  if(desktop->background)
+    gtk_widget_set_size_request (desktop->background->window, width, height);
 
   /* TODO: make this height a little nicer */
   window_height = height * WAYWARD_PANEL_HEIGHT_RATIO;
   window_height = 50;
-  //gtk_window_resize (GTK_WINDOW (desktop->panel->window),
-  //    WAYWARD_PANEL_WIDTH, window_height);
+  
 
   shell_helper_move_surface (desktop->helper, desktop->panel->surface,
-      -1, (global_desktop_height - window_height) );
+      WAYWARD_NO_MOVE_X, (global_desktop_height - window_height) );
 
 
   gtk_window_resize (GTK_WINDOW (desktop->panel->window),
-      width + 1, window_height);
+      width + 1, 50);
 
   //wayward_launcher_calculate (WAYWARD_LAUNCHER (desktop->launcher_grid->window),       &global_grid_width, &global_grid_height, NULL);
 
@@ -365,37 +377,21 @@ shell_configure (struct desktop *desktop,
   gtk_widget_set_size_request (desktop->launcher_grid->window,
       global_grid_width + 100, global_grid_height);
 
-  //shell_helper_move_surface (desktop->helper, desktop->panel->surface,
-  //    0, (height - window_height) / 10);
 
 
-
-
-
-
-  //shell_helper_move_surface (desktop->helper, desktop->clock->surface,
-  //    WAYWARD_PANEL_WIDTH, (height - window_height) / 2);
-
-
-  shell_helper_move_surface (desktop->helper, desktop->clock->surface,
-      width - WAYWARD_CLOCK_WIDTH, (height - window_height - WAYWARD_CLOCK_HEIGHT+ 5));
+  shell_helper_move_surface ( desktop->helper, desktop->clock->surface,
+      global_panel_monitor * width - WAYWARD_CLOCK_WIDTH, 
+     (height - window_height - WAYWARD_CLOCK_HEIGHT+ 5)
+  );
 
 
   gtk_window_resize (GTK_WINDOW (desktop->clock->window),
       WAYWARD_CLOCK_WIDTH, WAYWARD_CLOCK_HEIGHT);
 
 
-  /*
-  shell_helper_move_surface (desktop->helper,
-      desktop->launcher_grid->surface,
-      - grid_width,
-      ((height - window_height) / 2) + WAYWARD_CLOCK_HEIGHT);
-    */
-
-  shell_helper_move_surface (desktop->helper,
-      desktop->launcher_grid->surface,
-      - (global_grid_width + 100),
-      global_desktop_height - window_height - 3 * WAYWARD_CLOCK_HEIGHT - 114 );
+  shell_helper_move_surface (desktop->helper, desktop->launcher_grid->surface,
+      ( global_panel_monitor - 1 ) * width,
+      -10 * (global_desktop_height - window_height - 3 * WAYWARD_CLOCK_HEIGHT - 114 ) );
 
    weston_desktop_shell_desktop_ready (desktop->wshell);
 
@@ -558,35 +554,22 @@ panel_window_enter_cb (GtkWidget *widget,
   }
 
   gint window_height = 50;
+  
   shell_helper_move_surface (desktop->helper, desktop->panel->surface,
-      -1, (global_desktop_height - window_height ) );
+      WAYWARD_NO_MOVE_X, (global_desktop_height - window_height ) );
 
 
   shell_helper_move_surface (desktop->helper, desktop->clock->surface,
-      global_desktop_width - WAYWARD_CLOCK_WIDTH, (global_desktop_height - window_height - WAYWARD_CLOCK_HEIGHT + 5));
-
-
-  //shell_helper_slide_surface_back (desktop->helper,
-  //      desktop->panel->surface);
-  //shell_helper_slide_surface_back (desktop->helper,
-  //      desktop->clock->surface);
-
-
-  //wayward_panel_set_expand (WAYWARD_PANEL (desktop->panel->window), TRUE);
+    WAYWARD_NO_MOVE_X, (global_desktop_height - window_height - WAYWARD_CLOCK_HEIGHT + 5)
+  );
 
   return FALSE;
 }
 
-//gint global_desktop_width;
-
 static gboolean
 leave_panel_idle_cb (gpointer data)
 {
-
-
-
   struct desktop *desktop = data;
-  //gint width;
 
   if( (desktop->system_visible || desktop->volume_visible) && !desktop->hide_panel_idle_id) {
     //desktop->hide_panel_idle_id = g_idle_add(leave_panel_idle_cb, desktop);
@@ -603,27 +586,17 @@ leave_panel_idle_cb (gpointer data)
   //}
 
 
-  /*
-  shell_helper_slide_surface (desktop->helper,
-      desktop->panel->surface,
-      WAYWARD_VERTICAL_CLOCK_WIDTH - WAYWARD_PANEL_WIDTH, 0);
-  shell_helper_slide_surface (desktop->helper,
-      desktop->clock->surface,
-      WAYWARD_VERTICAL_CLOCK_WIDTH - WAYWARD_PANEL_WIDTH - width, 0);
-  */
-
-
   //window_height = height * WAYWARD_PANEL_HEIGHT_RATIO;
   gint window_height = 50;
 
-
-  shell_helper_move_surface (desktop->helper, desktop->panel->surface,
-      -1, global_desktop_height - 4 );
-  //shell_helper_move_surface (desktop->helper, desktop->panel->surface, 0, 44 );
-  //if(width) {
-    shell_helper_move_surface (desktop->helper, desktop->clock->surface,
-      global_desktop_width + WAYWARD_CLOCK_WIDTH, (global_desktop_height - window_height - WAYWARD_CLOCK_HEIGHT));
-   //shell_helper_move_surface (desktop->helper, desktop->clock->surface, global_desktop_width, (global_desktop_height - window_height) );
+  shell_helper_move_surface (desktop->helper, desktop->panel->surface, WAYWARD_NO_MOVE_X, global_desktop_height - 3 );
+  
+  
+  shell_helper_move_surface (desktop->helper, desktop->clock->surface,
+    WAYWARD_NO_MOVE_X, 
+   global_desktop_height +WAYWARD_CLOCK_HEIGHT
+  );
+  
   //}
   /*
   shell_helper_slide_surface (desktop->helper,
@@ -657,12 +630,7 @@ panel_window_leave_cb (GtkWidget *widget,
 {
 
   global_counter++;
-  /*
-  FILE *f;
-  f = fopen("/tmp/x.log", "a+");
-  fprintf(f, "panel leave called  %d \n", global_counter);
-  fclose(f);
-  */
+
   if(!desktop->panel_event_leaved) {
     desktop->panel_event_leaved = 1;
     desktop->panel_event_entered = 0;
@@ -685,10 +653,10 @@ panel_window_leave_cb (GtkWidget *widget,
       return FALSE;
     }
 
-  if(!desktop->hide_panel_idle_id) {
+  //if(!desktop->hide_panel_idle_id) {
     //desktop->hide_panel_idle_id = g_timeout_add (300, leave_panel_idle_cb, desktop);
     //desktop->hide_panel_idle_id = g_idle_add (leave_panel_idle_cb, desktop);
-  }
+  //}
   leave_panel_idle_cb(desktop);
   return FALSE;
 }
@@ -766,8 +734,7 @@ panel_key_pressed_cb (GtkWidget *widget, GdkEventKey *event, gpointer data) {
   //launcher_grid_toggle (desktop->launcher_grid->window, desktop);
 
 
-//  shell_helper_slide_surface_back (desktop->helper,
- //     desktop->clock->surface);
+
 
 fprintf(f, "Panel is being moved", event->keyval);
 
@@ -798,9 +765,13 @@ fprintf(f, "Panel is being moved", event->keyval);
 }
 */
 
+
+
 static void
 panel_create (struct desktop *desktop)
 {
+
+  
   struct element *panel;
   GdkWindow *gdk_window;
 
@@ -840,7 +811,7 @@ panel_create (struct desktop *desktop)
   panel->surface = gdk_wayland_window_get_wl_surface (gdk_window);
 
   weston_desktop_shell_set_user_data (desktop->wshell, desktop);
-  weston_desktop_shell_set_panel (desktop->wshell, desktop->output,
+  weston_desktop_shell_set_panel (desktop->wshell, desktop->output, 
     panel->surface);
   weston_desktop_shell_set_panel_position (desktop->wshell,
 	  WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM);
@@ -851,6 +822,7 @@ panel_create (struct desktop *desktop)
   gtk_widget_show_all (panel->window);
 
   desktop->panel = panel;
+  
 }
 
 /* Expose callback for the drawing area */
@@ -859,9 +831,12 @@ draw_cb (GtkWidget *widget,
     cairo_t *cr,
     gpointer data)
 {
-  struct desktop *desktop = data;
-
-  gdk_cairo_set_source_pixbuf (cr, desktop->background->pixbuf, 0, 0);
+  struct output *output = data;
+  
+  if(!output || !output->background)
+    logfile("output does not exist \n");
+  
+  gdk_cairo_set_source_pixbuf (cr, output->background->pixbuf, 0, 0);
   cairo_paint (cr);
 
   return TRUE;
@@ -890,15 +865,18 @@ scale_background (GdkPixbuf *original_pixbuf)
   screen_width = gdk_screen_get_width (screen);
   screen_height = gdk_screen_get_height (screen);
 
-  printf("Screen width %d / height %d \n", screen_width, screen_height);
+  
+  logfile("Screen width %d / height %d \n", screen_width, screen_height);
 
-  //screen_width = global_desktop_width;
-  //screen_height = global_desktop_height;
+  screen_width = global_desktop_width;
+  screen_height = global_desktop_height;
 
-  //printf("Screen width %d / height %d \n", screen_width, screen_height);
+  logfile("Screen width %d / height %d \n", screen_width, screen_height);
 
   original_width = gdk_pixbuf_get_width (original_pixbuf);
   original_height = gdk_pixbuf_get_height (original_pixbuf);
+  
+  logfile("Original width %d / height %d \n", original_width, original_height);
 
   ratio_horizontal = (double) screen_width / original_width;
   ratio_vertical = (double) screen_height / original_height;
@@ -912,21 +890,24 @@ scale_background (GdkPixbuf *original_pixbuf)
 }
 
 static void
-background_create (struct desktop *desktop, const gchar *filename)
+background_create (struct desktop *desktop, const gchar *filename, struct output *output)
 {
   GdkWindow *gdk_window;
   struct element *background;
-  //const gchar *filename;
+  
   GdkPixbuf *unscaled_background;
   //const gchar *xpm_data[] = {"1 1 1 1", "_ c SteelBlue", "_"};
   const gchar *xpm_data[] = {"1 1 1 1", "_ c Black", "_"};
 
 
-  if(!desktop->background) {
+  if(!output->background) {
     background = malloc (sizeof *background);
     memset (background, 0, sizeof *background);
+    
+    logfile("Creating background \n");
+    
   } else {
-    background = desktop->background;
+    background = output->background;
   }
 
   if(!filename) {
@@ -947,9 +928,10 @@ background_create (struct desktop *desktop, const gchar *filename)
   background->pixbuf = scale_background (unscaled_background);
   g_object_unref (unscaled_background);
 
-  gboolean handled;
-  if(desktop->background) {
-
+  //gboolean handled;
+    
+  if(output->background) {
+    logfile("Found output background \n");
     //g_signal_emit_by_name (background->window, "draw", desktop, &handled);
     //gtk_window_resize (GTK_WINDOW (desktop->background->window),
     //  1920, 400);
@@ -965,10 +947,13 @@ background_create (struct desktop *desktop, const gchar *filename)
       G_CALLBACK (destroy_cb), NULL);
 
   g_signal_connect (background->window, "draw",
-      G_CALLBACK (draw_cb), desktop);
+      G_CALLBACK (draw_cb), output);
 
   gtk_window_set_title (GTK_WINDOW (background->window), "wayward");
   gtk_window_set_decorated (GTK_WINDOW (background->window), FALSE);
+  
+  gtk_widget_set_size_request (background->window, global_desktop_width, global_desktop_height);
+  
   gtk_widget_realize (background->window);
 
   gdk_window = gtk_widget_get_window (background->window);
@@ -976,18 +961,22 @@ background_create (struct desktop *desktop, const gchar *filename)
 
   background->surface = gdk_wayland_window_get_wl_surface (gdk_window);
   weston_desktop_shell_set_user_data (desktop->wshell, desktop);
-  weston_desktop_shell_set_background (desktop->wshell, desktop->output,
+  
+  weston_desktop_shell_set_background (desktop->wshell, output->output,
 	  background->surface);
 
-  printf("Setting wallpaper \n");
+  logfile("Setting wallpaper \n");
 
-  if(desktop->background && desktop->background->window ) {
-    gtk_widget_destroy( desktop->background->window );
-    free(desktop->background);
+  if(output->background && output->background->window ) {
+    gtk_widget_destroy( output->background->window );
+    free(output->background);
+    desktop->background = NULL;
   }
-  printf("Setting wallpaper 2 \n");
+  logfile("Setting wallpaper 2 \n");
 
-  desktop->background = background;
+  output->background = background;
+  if(!desktop->background)
+    desktop->background = output->background;
 
   gtk_widget_show_all (background->window);
 }
@@ -1064,16 +1053,14 @@ static void keyboard_enter (void *data, struct wl_keyboard *keyboard, uint32_t s
   if(!is_panel_surface_focused) {
     if(!desktop->grid_visible) {
       launcher_grid_toggle (desktop->launcher_grid->window, desktop);
-      //shell_helper_slide_surface_back (desktop->helper, desktop->panel->surface);
-      //shell_helper_slide_surface_back (desktop->helper, desktop->clock->surface);
+      
       panel_window_enter_cb(NULL, NULL, desktop);
       shell_helper_keyboard_focus_surface(desktop->helper, desktop->launcher_grid->surface);
       is_focus_on_launcher_grid = 1;
     } else {
       launcher_grid_toggle (desktop->launcher_grid->window, desktop);
       leave_panel_idle_cb(desktop);
-      //shell_helper_slide_surface (desktop->helper, desktop->panel->surface, 0, 44);
-      //shell_helper_slide_surface (desktop->helper, desktop->clock->surface, global_desktop_width, 44);
+      
     }
     is_panel_surface_focused = 1;
   } else {
@@ -1088,10 +1075,9 @@ static void keyboard_enter (void *data, struct wl_keyboard *keyboard, uint32_t s
 }
 static void keyboard_leave (void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface) {
   is_panel_surface_focused = 0;
-  FILE *f;
-  f = fopen("/tmp/x.log", "a+");
-  fprintf ( f, " Unfocus keyboard \n");
-  fclose(f);
+  
+  logfile (" Unfocus keyboard \n");
+  
 }
 static void keyboard_key (void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
 
@@ -1111,10 +1097,6 @@ seat_handle_capabilities (void *data,
 {
 
   struct desktop *desktop = data;
-
-
-  //FILE *f;
-  //f = fopen("/tmp/x.log", "a+");
 
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !desktop->pointer) {
     desktop->pointer = wl_seat_get_pointer(seat);
@@ -1136,8 +1118,6 @@ seat_handle_capabilities (void *data,
     //fprintf ( f, "the keyboard was deleted");
   }
 
-  //fclose(f);
-
   /* TODO: keyboard and touch */
 }
 
@@ -1153,6 +1133,90 @@ static const struct wl_seat_listener seat_listener = {
   seat_handle_name
 };
 
+
+//Output listeners
+static void
+output_handle_geometry(void *data,
+                       struct wl_output *wl_output,
+                       int x, int y,
+                       int physical_width,
+                       int physical_height,
+                       int subpixel,
+                       const char *make,
+                       const char *model,
+                       int transform)
+{
+	#if 0
+  
+  struct output *output = data;
+  
+	output->x = x;
+	output->y = y;
+
+	if (output->panel)
+		window_set_buffer_transform(output->panel->window, transform);
+	if (output->background)
+		window_set_buffer_transform(output->background->window, transform);
+  #endif
+}
+
+static void
+output_handle_mode(void *data,
+		   struct wl_output *wl_output,
+		   uint32_t flags,
+		   int width,
+		   int height,
+		   int refresh)
+{
+  
+  if(width > global_desktop_width) {
+    global_desktop_width = width;
+    logfile("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
+  }  
+  if(height > global_desktop_height) {
+    global_desktop_height = height;
+    printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
+  }
+  
+  
+  
+}
+
+static void
+output_handle_done(void *data,
+                   struct wl_output *wl_output)
+{
+  
+  logfile("output done \n");
+  
+}
+
+static void
+output_handle_scale(void *data,
+                    struct wl_output *wl_output,
+                    int32_t scale)
+{
+  #if 0
+	struct output *output = data;
+
+	if (output->panel)
+		window_set_buffer_scale(output->panel->window, scale);
+	if (output->background)
+		window_set_buffer_scale(output->background->window, scale);
+  #endif
+}
+
+static const struct wl_output_listener output_listener = {
+	output_handle_geometry,
+	output_handle_mode,
+	output_handle_done,
+	output_handle_scale
+};
+
+
+
+
+
 static void
 registry_handle_global (void *data,
     struct wl_registry *registry,
@@ -1161,8 +1225,7 @@ registry_handle_global (void *data,
     uint32_t version)
 {
   struct desktop *d = data;
-
-
+  struct output *doutput;
 
   if (!strcmp (interface, "weston_desktop_shell"))
     {
@@ -1173,9 +1236,39 @@ registry_handle_global (void *data,
     }
   else if (!strcmp (interface, "wl_output"))
     {
-      /* TODO: create multiple outputs */
-      d->output = wl_registry_bind (registry, name,
-          &wl_output_interface, 1);
+      
+      char *env_panel_monitor_num = getenv("WAYWARD_PANEL_MONITOR");
+      
+      
+      global_monitor_count++;
+      
+      if(env_panel_monitor_num)
+        logfile("\n registry_global wl_output %d %s %d \n", global_monitor_count, env_panel_monitor_num, atoi(env_panel_monitor_num) );
+      
+      doutput = malloc(sizeof *doutput);
+      if (!doutput)
+        return;
+      
+      doutput->background = NULL;
+      
+      doutput->output = wl_registry_bind (registry, name,
+          &wl_output_interface, 3);
+      
+ 
+      
+      wl_list_insert(&d->outputs, &doutput->link);
+      
+      wl_output_add_listener(doutput->output, &output_listener, d);
+      
+      if(!d->output)
+        d->output = doutput->output;
+      
+      if(env_panel_monitor_num && global_monitor_count == atoi(env_panel_monitor_num) ) {
+        d->output = doutput->output;
+        global_panel_monitor = global_monitor_count; 
+      }
+      
+      
     }
   else if (!strcmp (interface, "wl_seat"))
     {
@@ -1187,6 +1280,8 @@ registry_handle_global (void *data,
     {
       d->helper = wl_registry_bind (registry, name,
           &shell_helper_interface, 1);
+      
+      
     }
   #if 0
   else if (!strcmp(wl_interface,"wl_compositor")) {
@@ -1295,12 +1390,6 @@ static gboolean check_gamma(gpointer data) {
 
 
 
-  /*
-  FILE *f;
-  f = fopen("/tmp/x.log", "a+");
-  fprintf(f, "Hour is %d \n ", hour);
-  */
-
 
 
 
@@ -1371,17 +1460,20 @@ static gboolean check_wallpaper(gpointer data) {
 
   struct stat st;
   char wallpaper_path[PATH_MAX];
+  struct output *cur_output;
 
   sprintf(wallpaper_path, "%s/.config/wayward-wallpaper.jpg", global_home_dir);
   int file_access = access(wallpaper_path, F_OK);
 
-  printf("Wallpaper filename is %s %d \n", wallpaper_path, file_access);
+  logfile("Wallpaper filename is %s %d \n", wallpaper_path, file_access);
 
   if(file_access == -1 && !global_wallpaper_size) {
     return TRUE;
   }
   else if( file_access == -1 && global_wallpaper_size) {
-    background_create(desktop, NULL);
+    wl_list_for_each(cur_output, &desktop->outputs, link) {
+      background_create(desktop, NULL, cur_output);
+    }
     global_wallpaper_size = 0;
     return TRUE;
   }
@@ -1391,23 +1483,14 @@ static gboolean check_wallpaper(gpointer data) {
 
   if(st.st_size < 1 && !global_wallpaper_size) //does not exist
     return TRUE;
-  #if 0
-  else if(st.st_size < 1 && global_wallpaper_size) { //file removed
-    //delete wallpaper
-    global_wallpaper_size = 0;
-    background_create(desktop, NULL);
-    return TRUE;
-  }
-  #endif
   else if(st.st_size > 0 && (!global_wallpaper_size || st.st_size !=global_wallpaper_size) ) { //set wallpaper
     //delete wallpaper
     global_wallpaper_size = st.st_size;
-    printf("global_wallpaper_size is %d \n", global_wallpaper_size);
-    background_create(desktop, wallpaper_path);
-
+    logfile("global_wallpaper_size is %d \n", global_wallpaper_size);
+    wl_list_for_each(cur_output, &desktop->outputs, link) {
+      background_create(desktop, wallpaper_path, cur_output);
+    }
   }
-
-  //global_wallpaper_size = st.st_size;
 
   return TRUE;
 
@@ -1415,11 +1498,14 @@ static gboolean check_wallpaper(gpointer data) {
 
 
 
-int
-main (int argc,
+int main (int argc,
     char *argv[])
 {
   struct desktop *desktop;
+  
+  
+  
+  FILE *f;
 
   global_home_dir = getenv("HOME");
 
@@ -1430,6 +1516,15 @@ main (int argc,
   g_resources_register (wayward_get_resource ());
 
   desktop = malloc (sizeof *desktop);
+  if(!desktop)
+    return 0;
+  
+  
+  
+  wl_list_init(&desktop->outputs);
+  
+  
+  
   desktop->output = NULL;
   desktop->shell = NULL;
   desktop->helper = NULL;
@@ -1437,9 +1532,15 @@ main (int argc,
   desktop->pointer = NULL;
   desktop->keyboard = NULL;
   desktop->background = NULL;
+  
+  f = fopen("/tmp/x1.log", "w");
+  fprintf(f, "Start log \n ");
+  fclose(f);
 
   desktop->gdk_display = gdk_display_get_default ();
   desktop->display = gdk_wayland_display_get_wl_display (desktop->gdk_display);
+  
+  
   if (desktop->display == NULL)
     {
       fprintf (stderr, "failed to get display: %m\n");
@@ -1449,13 +1550,19 @@ main (int argc,
   desktop->registry = wl_display_get_registry (desktop->display);
   wl_registry_add_listener (desktop->registry,
       &registry_listener, desktop);
+  
+  
 
+  wl_display_roundtrip (desktop->display);  
+  wl_display_roundtrip (desktop->display);  
+    
   /* Wait until we have been notified about the compositor,
    * shell, and shell helper objects */
   if (!desktop->output || (!desktop->wshell) ||
       !desktop->helper)
     wl_display_roundtrip (desktop->display);
-  if (!desktop->output || (!desktop->shell && !desktop->wshell) ||
+  
+  if ((!desktop->shell && !desktop->wshell) ||
       !desktop->helper)
     {
       fprintf (stderr, "could not find output, shell or helper modules\n");
@@ -1482,31 +1589,37 @@ main (int argc,
   check_battery_exists();
 
   css_setup (desktop);
-  //background_create (desktop, NULL);
+  
   curtain_create (desktop);
 
-
+  
+  
 
   /* panel needs to be first so the clock and launcher grid can
    * be added to its layer */
   panel_create (desktop);
   clock_create (desktop);
+  
+  
+  logfile("panel \n ");
+  
 
 
   grab_surface_create(desktop);
 
-  //Add wallpaper timeout
-  //struct stat st;
-  //stat(filename, &st);
-  //size = st.st_size;
-  //if( access( fname, F_OK ) != -1 ) {
-    // file exists
-  //} else {
-    // file doesn't exist
-  //}
   global_wallpaper_size = 2;
   g_timeout_add_seconds (30, check_wallpaper, desktop);
+  
+  
+  
+  logfile("wallpaper \n ");
+  
+  
   check_wallpaper(desktop);
+  
+  
+  logfile("wallpaper 2 \n ");
+  
 
   //Add gamma check timeout
   //TODO fix warm.dat

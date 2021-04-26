@@ -59,15 +59,20 @@ Use gsettings to modify and restart the program. E.g.
 
 Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checked every 30 seconds for changes. Removing ~/.config/wayward-wallpaper.jpg will remove the wallpaper.
 
+## Environment variables
+
+Use `WAYWARD_PANEL_MONITOR=n` to specify monitor number where the global panel will be placed.
+
 ## Changelog
 
+0.8.3 - Add initial multi-monitor support
 0.8 - Add battery indicator
 
 ----
 ## Known issues and limitations
 
-* No multimonitor support
-* Need to restart wayward after a new app installation to see the app in the app launcher.
+* Basic multimonitor support, needs to be the same resolution
+* Need to restart weston after a new app installation to see the new app in the app launcher.
 
 
 

@@ -740,11 +740,12 @@ wayward_launcher_calculate (WaywardLauncher *self,
   //panel_height = output_height * WAYWARD_PANEL_HEIGHT_RATIO;
 
   
+  /*
   FILE *f;
   f = fopen("/tmp/x.log", "a+");
   fprintf ( f, "Background %d \n", global_desktop_width);
 	fclose(f);
-  
+  */
   
   if(global_desktop_width > 1920) {
     *grid_cols = 5;

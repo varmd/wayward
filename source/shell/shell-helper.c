@@ -371,6 +371,8 @@ shell_helper_move_surface(struct wl_client *client,
 	if (!view)
 		return;
 
+  if(x == -13371)
+    x = view->geometry.x;
 	weston_view_set_position(view, x, y);
 	weston_view_update_transform(view);
 }
@@ -424,6 +426,8 @@ shell_helper_add_surface_to_layer(struct wl_client *client,
 	new_surface->output = existing_view->output;
 }
 
+//TODO
+//Is this needed?
 static void
 configure_panel(struct weston_surface *es, int32_t sx, int32_t sy)
 {
@@ -433,8 +437,8 @@ configure_panel(struct weston_surface *es, int32_t sx, int32_t sy)
 	view = container_of(es->views.next, struct weston_view, surface_link);
 
 	if (wl_list_empty(&view->layer_link.link)) {
-		weston_layer_entry_insert(&helper->panel_layer->view_list, &view->layer_link);
-		weston_compositor_schedule_repaint(es->compositor);
+		//weston_layer_entry_insert(&helper->panel_layer->view_list, &view->layer_link);
+		//weston_compositor_schedule_repaint(es->compositor);
 	}
 }
 
@@ -443,6 +447,8 @@ shell_helper_set_panel(struct wl_client *client,
 		       struct wl_resource *resource,
 		       struct wl_resource *surface_resource)
 {
+  
+  
 	struct shell_helper *helper = wl_resource_get_user_data(resource);
 	struct weston_surface *surface =
 		wl_resource_get_user_data(surface_resource);

@@ -1,5 +1,5 @@
 pkgname=wayward
-pkgver=0.8.2
+pkgver=0.8.3
 pkgrel=1
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')

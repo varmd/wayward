@@ -8,6 +8,7 @@ cd ..
 #cd protocol
 #make
 
+WESTON_VER=9
 
 GTK_CFLAGS="-std=c11 -pthread -I/usr/include/gio-unix-2.0/ -I/usr/lib/glib-2.0/include  -I. -I../gen/ -I/usr/include -I/usr/include/gtk-3.0 
 -I/usr/include/glib-2.0 \
@@ -19,7 +20,7 @@ GTK_CFLAGS="-std=c11 -pthread -I/usr/include/gio-unix-2.0/ -I/usr/lib/glib-2.0/i
 -I/usr/include/harfbuzz \
 -I/usr/include/gsettings-desktop-schemas \
 -I/usr/include/pixman-1 \
--I/usr/include/libweston-9 \
+-I/usr/include/libweston-$WESTON_VER \
 -I/usr/include/
 "
 
@@ -69,17 +70,13 @@ SOURCES="\
 #wayward-resources.c: wayward.gresource.xml $(resource_files)
 glib-compile-resources wayward.gresource.xml --target=wayward-resources.c --sourcedir=. --generate-source --c-name wayward
 glib-compile-resources wayward.gresource.xml --target=wayward-resources.h --sourcedir=. --generate-header --c-name wayward
-#wayward-resources.h: wayward.gresource.xml $(resource_files)
-#	$(AM_V_GEN) glib-compile-resources --target=$@ --sourcedir=$(srcdir) --generate-header --c-name wayward $<
 
 
 gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS} ${SOURCES} ${GTK_LIBS} -lm  -o wayward
 
 
 
-gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-9 -lweston-desktop-9 -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
-
-#/usr/bin/install -c 
+gcc -O2 -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -lweston-desktop-$WESTON_VER -o shell_helper.so -fPIC ../gen/weston-desktop-shell-protocol.c ../gen/shell-helper-protocol.c shell-helper.c
 
 #make
 echo OK!

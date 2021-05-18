@@ -1,5 +1,13 @@
 # wayward - fast desktop shell for wayland and weston
 
+## Features
+
+* Lightweight, only 50-70MB memory usage
+* Bottom launch panel with autohide, time, date, volume control, and restart/shutdown buttons.
+* Button to prevent monitor standby when playing videos
+* No X11 dependencies, Xwayland is not required
+* Only 4 dependencies
+
 ----
 ## Screenshot
 
@@ -61,11 +69,12 @@ Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checke
 
 ## Environment variables
 
-Use `WAYWARD_PANEL_MONITOR=n` to specify monitor number where the global panel will be placed.
+Use `export WAYWARD_PANEL_MONITOR=n` to specify monitor number where the global panel will be placed. Needs to be placed before the call to weston.
 
 ## Changelog
 
 0.8.3 - Add initial multi-monitor support
+
 0.8 - Add battery indicator
 
 ----

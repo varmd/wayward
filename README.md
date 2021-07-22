@@ -53,9 +53,15 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 ----
 ## Keyboard shortcuts
 
-* Super+a - See list of open applications. Use cursor or mouse to select. Press q
-  to close an open app, right click to close an open app
-* Super+f - Open app launcher
+* `Super + a` - See list of open applications. Use cursor or mouse to select. Press q to close an open app, right click to close an open app
+* `Super + f` - Open app launcher
+* `Volume mute` - Mute volume
+* `Volume up` - Volume up
+* `Volume down` - Volume down
+* `Super + Shift + T` - Launch weston-terminal
+* `Browser key` - Launch browser
+* `Super + Ctrl + Alt + s` - Shutdown
+* `Super + Ctrl + Alt + r` - Restart
 
 ## Changing apps in quick launch bars
 
@@ -72,6 +78,8 @@ Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checke
 Use `export WAYWARD_PANEL_MONITOR=n` to specify monitor number where the global panel will be placed. Needs to be placed before the call to weston.
 
 ## Changelog
+
+0.9   - Add keyboard shortcuts for volume and shutdown.
 
 0.8.3 - Add initial multi-monitor support
 

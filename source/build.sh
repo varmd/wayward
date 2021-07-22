@@ -26,7 +26,7 @@ GTK_CFLAGS="-std=c11 -pthread -I/usr/include/gio-unix-2.0/ -I/usr/lib/glib-2.0/i
 
 #GTK_LIBS="-lwayland-client -lgtk-3 -lgnome-menu-3 -lgio-2.0 -lgtk-3 -lgdk-3 -lpangocairo-1.0 -lpango-1.0 -lcairo-gobject -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lasound -lxkbcommon"
 
-GTK_LIBS="-lwayland-client -lgtk-3 -lgio-2.0 -lgtk-3 -lgdk-3 -lpangocairo-1.0 -lpango-1.0 -lcairo-gobject -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lasound -lxkbcommon"
+GTK_LIBS="-lwayland-client -lgtk-3 -lgio-2.0 -lgtk-3 -lgdk-3 -lpangocairo-1.0 -lpango-1.0 -lcairo-gobject -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lasound -lxkbcommon -lrt"
 
 
 
@@ -35,9 +35,6 @@ GTK_LIBS="-lwayland-client -lgtk-3 -lgio-2.0 -lgtk-3 -lgdk-3 -lpangocairo-1.0 -l
 cd `dirname $0`
 
 cd shell
-
-	#../gen/desktop-shell-client-protocol.h		\
-	#../gen/desktop-shell-protocol.c		\
 
 SOURCES="\
 	wayward.c				\
@@ -72,7 +69,7 @@ glib-compile-resources wayward.gresource.xml --target=wayward-resources.c --sour
 glib-compile-resources wayward.gresource.xml --target=wayward-resources.h --sourcedir=. --generate-header --c-name wayward
 
 
-gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS} ${SOURCES} ${GTK_LIBS} -lm  -o wayward
+gcc -O2 -Wno-deprecated-declarations ${GTK_CFLAGS}  ${GTK_LIBS} -o wayward  ${SOURCES} -lm 
 
 
 

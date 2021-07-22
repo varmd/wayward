@@ -65,4 +65,10 @@ GtkWidget * wayward_clock_new (void);
 
 void wayward_clock_show_section (WaywardClock *self, WaywardClockSection section);
 
+void clock_volume_mute ();
+void clock_volume_up ();
+void clock_volume_down ();
+void clock_shutdown ();
+void clock_restart ();
+
 #endif /* __WAYWARD_CLOCK_H__ */

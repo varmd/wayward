@@ -24,8 +24,7 @@
 #include "app-icon.h"
 
 #include <alsa/asoundlib.h>
-//#define GNOME_DESKTOP_USE_UNSTABLE_API
-//#include <libgnome-desktop/gnome-wall-clock.h>
+
 
 #include "clock.h"
 
@@ -45,14 +44,17 @@ struct WaywardClockPrivate {
   GtkWidget *volume_scale;
   GtkWidget *volume_image;
 
-  //GnomeWallClock *wall_clock;
-
   snd_mixer_t *mixer_handle;
   snd_mixer_elem_t *mixer;
   glong min_volume, max_volume;
 };
 
+static WaywardClock *global_clock = NULL;
+
 G_DEFINE_TYPE_WITH_PRIVATE(WaywardClock, wayward_clock, GTK_TYPE_WINDOW)
+
+static void setup_mixer (WaywardClock *self);
+static gboolean volume_idle_cb (gpointer data);
 
 static void
 wayward_clock_init (WaywardClock *self)
@@ -86,21 +88,18 @@ percentage_to_alsa_volume (WaywardClock *self,
   return (range * value / 100) + self->priv->min_volume;
 }
 
-static void
-volume_changed_cb (GtkRange *range,
-    WaywardClock *self)
-{
-  gdouble value;
+static void volume_set (gdouble value, WaywardClock *self) {
+  
   const gchar *icon_name;
   GtkWidget *box;
+  
 
-  value = gtk_range_get_value (range);
-
+  printf("volume is %f \n", value);
+  
   if (self->priv->mixer != NULL)
-    {
-      snd_mixer_selem_set_playback_volume_all (self->priv->mixer,
-          percentage_to_alsa_volume (self, value));
-    }
+  {
+    snd_mixer_selem_set_playback_volume_all (self->priv->mixer, percentage_to_alsa_volume (self, value));
+  }
 
   /* update the icon */
   if (value > 75)
@@ -111,6 +110,8 @@ volume_changed_cb (GtkRange *range,
     icon_name = "audio-volume-low-symbolic";
   else
     icon_name = "audio-volume-muted-symbolic";
+  
+  printf("icon_name is %s \n", icon_name);
 
   box = gtk_widget_get_parent (self->priv->volume_image);
   gtk_widget_destroy (self->priv->volume_image);
@@ -120,7 +121,69 @@ volume_changed_cb (GtkRange *range,
       FALSE, FALSE, 0);
   gtk_widget_show (self->priv->volume_image);
 
-  g_signal_emit (self, signals[VOLUME_CHANGED], 0, value, icon_name);
+  g_signal_emit (self, signals[VOLUME_CHANGED], 0, value, icon_name);  
+  volume_idle_cb(self);
+}
+
+
+//Called from wayward.c
+void clock_volume_mute () {
+  volume_set(0, global_clock);
+}
+
+void clock_volume_up () {
+  
+  WaywardClock *self = global_clock;
+  long volume;
+  
+  snd_mixer_handle_events (self->priv->mixer_handle);
+  snd_mixer_selem_get_playback_volume (self->priv->mixer,
+  0, &volume);
+  
+  printf("volume up -volume is %d \n", volume);
+  
+  
+  volume_set( alsa_volume_to_percentage(global_clock, (gdouble)(volume + 10)), global_clock);
+
+}
+
+void clock_volume_down () {
+  
+  WaywardClock *self = global_clock;
+  long volume;
+  
+  snd_mixer_handle_events (self->priv->mixer_handle);
+  snd_mixer_selem_get_playback_volume (self->priv->mixer,
+  0, &volume);
+  
+  printf("volume down - volume is %d \n", volume);
+  
+  
+  volume_set( alsa_volume_to_percentage(global_clock, (gdouble)(volume - 10)), global_clock);
+
+}
+
+
+
+static void volume_changed_cb (GtkRange *range,
+    WaywardClock *self)
+{
+  gdouble value;  
+
+  value = gtk_range_get_value (range);
+  
+  volume_set (value, self);
+  
+  printf("volume_changed_cb: %f is value \n", value);
+  
+  
+}
+
+static gboolean volume_startup_panel_cb (gpointer data)
+{
+  WaywardClock *self = WAYWARD_CLOCK (data);
+  volume_changed_cb(GTK_RANGE (self->priv->volume_scale), self);
+  return G_SOURCE_REMOVE;
 }
 
 static gboolean
@@ -128,33 +191,34 @@ volume_idle_cb (gpointer data)
 {
   WaywardClock *self = WAYWARD_CLOCK (data);
   glong volume;
-
+  
   if (self->priv->mixer != NULL)
     {
+      //snd_mixer_close (self->priv->mixer_handle);
+      //setup_mixer(self);
+      snd_mixer_handle_events (self->priv->mixer_handle);
       snd_mixer_selem_get_playback_volume (self->priv->mixer,
-          SND_MIXER_SCHN_MONO, &volume);
-
+          0, &volume);
+      
       gtk_range_set_value (GTK_RANGE (self->priv->volume_scale),
           alsa_volume_to_percentage (self, volume));
+      
+      printf("%d is volume \n", volume);
+      printf("%f is value \n", gtk_range_get_value ( GTK_RANGE (self->priv->volume_scale) ));
     }
 
-  return G_SOURCE_REMOVE;
+  return TRUE;
 }
+
+
 
 
 static void
 system_shutdown_button_clicked_cb (GtkButton *button,
     WaywardPanel *self)
 {
-  GAppInfo *appinfo = NULL;
-  gboolean ret = FALSE;
   //char *args[] = {"/usr/bin/sudo", , "/usr/bin/systemctl", "poweroff", (char *)0};
   execl ("/usr/bin/sudo", "/usr/bin/sudo", "/usr/bin/systemctl", "poweroff", (char *)0);
-
-//  execve("/usr/bin/systemctl poweroff", NULL, NULL);
-//  system("/usr/bin/systemctl poweroff");
-                                             
-                                                  
 }
 
 static void
@@ -162,8 +226,6 @@ system_restart_button_clicked_cb (GtkButton *button,
     WaywardPanel *self)
 {
   
-  GAppInfo *appinfo = NULL;
-  //gboolean ret = FALSE;
   //char *args[] = {"/usr/bin/systemctl", "reboot", (char *)0};
   execl ("/usr/bin/sudo", "/usr/bin/sudo", "/usr/bin/systemctl", "reboot", (char *)0);
 //  char *args[] = {"systemctl", "reboot", (char *)0};
@@ -173,6 +235,16 @@ system_restart_button_clicked_cb (GtkButton *button,
                                              
                                                   
 }
+
+
+void clock_shutdown () {
+  system_shutdown_button_clicked_cb(NULL, NULL);
+}
+
+void clock_restart () {
+  system_restart_button_clicked_cb(NULL, NULL);
+}
+
 
 static GtkWidget *
 create_system_box (WaywardClock *self)
@@ -242,7 +314,10 @@ create_volume_box (WaywardClock *self)
   /* set the initial value in an idle so ::volume-changed is emitted
    * when other widgets are connected to the signal and can react
    * accordingly. */
-  g_idle_add (volume_idle_cb, self);
+  //g_idle_add (volume_idle_cb, self);
+  
+  
+  g_timeout_add_seconds (30, volume_idle_cb, self);
 
   return box;
 }
@@ -388,8 +463,18 @@ wayward_clock_constructed (GObject *object)
   gtk_box_pack_start (GTK_BOX (box), gtk_revealer_new (), TRUE, TRUE, 0);
 
   setup_mixer (self);
+  
+  
+  
+  volume_idle_cb(self);  
+  printf("%f is value \n", gtk_range_get_value ( GTK_RANGE (self->priv->volume_scale) ));
+  
+  volume_changed_cb(GTK_RANGE (self->priv->volume_scale), self);
+  g_idle_add (volume_startup_panel_cb, self);
 
   wall_clock_notify_cb (self);
+  
+  global_clock = self;
 }
 
 static void

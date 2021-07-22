@@ -1,5 +1,5 @@
 pkgname=wayward
-pkgver=0.8.3
+pkgver=0.9.0
 pkgrel=1
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
@@ -11,11 +11,11 @@ depends=("weston" "gtk3" "adwaita-icon-theme" "ttf-droid")
 
 makedepends=( "fakeroot" "gcc")
 
-
+export _source="$PWD"
 prepare() {
   cd "$srcdir/"
   rm -rf $srcdir/source
-  cp -r ../source .
+  cp -r "$_source"/source .
 }
 
 build() {

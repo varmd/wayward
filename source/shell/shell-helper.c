@@ -26,6 +26,10 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include <sys/mman.h>
+#include <sys/stat.h>        
+#include <fcntl.h> 
+
 #include <libweston/libweston.h>
 #include <libweston-desktop/libweston-desktop.h>
 #include <linux/input.h>
@@ -34,9 +38,12 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-
+//sound control
+#include <alsa/asoundlib.h>
+#define alloca(x)  __builtin_alloca(x)
 
 #include "shell-helper-server-protocol.h"
+
 
 
 #ifndef container_of
@@ -74,6 +81,10 @@ enum exposay_layout_state {
 	EXPOSAY_LAYOUT_OVERVIEW, /* show all windows */
 	EXPOSAY_LAYOUT_ANIMATE_TO_OVERVIEW, /* in transition to all windows */
 };
+
+
+
+
 
 struct exposay_output {
 	int num_surfaces;
@@ -279,11 +290,27 @@ struct desktop_shell {
 	char *client;
 
 	struct timespec startup_time;
+  
+  
+  
 };
 
 //struct weston_output *
 //get_default_output(struct weston_compositor *compositor);
 
+enum shm_command {
+  SHM_START,
+  SHM_MUTE,
+  SHM_VOLUMEUP,
+  SHM_VOLUMEDOWN,
+  SHM_SHUTDOWN,
+  SHM_RESTART,
+  SHM_LAUNCH_BROWSER,
+  SHM_LAUNCH_TERMINAL,
+  SHM_LAUNCH_CALC,
+};
+
+static void setup_shm(int shm_command);
 
 struct weston_output *
 get_default_output(struct weston_compositor *compositor)
@@ -330,8 +357,11 @@ struct weston_seat *global_weston_seat;
 struct weston_keyboard *panel_keyboard;
 
 
-struct desktop_shell *global_desktop_shell;
+struct desktop_shell *global_desktop_shell = NULL;
 struct wl_array global_minimized_array;
+
+snd_mixer_t *global_alsa_mixer_handle = NULL;
+snd_mixer_elem_t *global_alsa_mixer = NULL;
 
 struct shell_helper {
 	struct weston_compositor *compositor;
@@ -689,14 +719,94 @@ shell_helper_keyboard_focus_surface(struct wl_client *client,
 }
 
 
+void setup_mixer() {
+  snd_mixer_selem_id_t *sid;
+  int ret;
+  long min_volume, max_volume;
+  
+  snd_mixer_t *mixer_handle;
+  snd_mixer_elem_t *mixer;
+
+  if ((ret = snd_mixer_open (&mixer_handle, 0)) < 0)
+    goto error;
+
+  if ((ret = snd_mixer_attach (mixer_handle, "default")) < 0)
+    goto error;
+
+  if ((ret = snd_mixer_selem_register (mixer_handle, NULL, NULL)) < 0)
+    goto error;
+
+  if ((ret = snd_mixer_load (mixer_handle)) < 0)
+    goto error;
+
+  snd_mixer_selem_id_alloca (&sid);
+  snd_mixer_selem_id_set_index (sid, 0);
+  snd_mixer_selem_id_set_name (sid, "Master");
+  mixer = snd_mixer_find_selem (mixer_handle, sid);
+
+  /* fallback to mixer "Master" */
+  if (mixer == NULL)
+    {
+      snd_mixer_selem_id_set_name (sid, "PCM");
+      mixer = snd_mixer_find_selem (mixer_handle, sid);
+      if (mixer == NULL)
+        goto error;
+    }
+
+  if ((ret = snd_mixer_selem_get_playback_volume_range (mixer,
+              &min_volume, &max_volume)) < 0)
+    goto error;
+  
+  global_alsa_mixer = mixer;
+  global_alsa_mixer_handle = mixer_handle;
+
+  return;
+
+error:
+  printf ("failed to setup mixer: %s", snd_strerror (ret));
+
+  if (mixer_handle != NULL)
+    snd_mixer_close (mixer_handle);
+
+}
+
 void
-fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data)
+mute_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_MUTE);
+}
+
+void volumeup_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_VOLUMEUP);
+}
+
+void volumedown_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_VOLUMEDOWN);
+}
+
+
+void shutdown_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_SHUTDOWN);
+}
+
+void restart_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_RESTART);
+}
+
+void terminal_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_LAUNCH_TERMINAL);
+}
+
+void browser_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_LAUNCH_BROWSER);
+}
+
+
+
+void fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data)
 {
   struct weston_surface *surface = keyboard->focus;
   struct desktop_shell *shell = data;
   
-	//struct weston_surface *surface;
-	//struct shell_surface *shsurf;
   struct weston_transform transform;
   struct weston_view *view;
   struct exposay_surface *esurface;
@@ -780,8 +890,7 @@ fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec *time
 	//weston_matrix_scale(&transform.matrix, surface->output->width / surface->width, 				    surface->output->height / surface->height, 1);
 	//weston_matrix_scale(matrix, 0.5, 0.5, 1.0);
   
-	//weston_matrix_scale(&transform.matrix, 0.5, 0.5, 1.0);
-	  weston_matrix_scale(&transform.matrix, 1.0, 1.0, 1.0);
+  weston_matrix_scale(&transform.matrix, 1.0, 1.0, 1.0);
   
   
 		//x = output->x + (output->width - width) / 2 - surf_x;
@@ -836,8 +945,21 @@ shell_helper_bind_key_panel(struct wl_client *client,
   weston_compositor_add_key_binding(helper->compositor, KEY_F, MODIFIER_SUPER, debug_binding, panel_weston_surface);
   weston_compositor_add_key_binding(helper->compositor, KEY_A, MODIFIER_SUPER, exposay_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_L, MODIFIER_SUPER, exposay_binding, shell);
-  
   weston_compositor_add_key_binding(helper->compositor, KEY_F12, MODIFIER_SUPER, fullscreen_binding, shell);
+  weston_compositor_add_key_binding(helper->compositor, KEY_MUTE, 0, mute_binding, shell);
+  weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEDOWN , 0, volumedown_binding, shell);
+  weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEUP , 0, volumeup_binding, shell);
+  
+  
+  
+  weston_compositor_add_key_binding(helper->compositor, KEY_S , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, shutdown_binding, shell);
+  
+  weston_compositor_add_key_binding(helper->compositor, KEY_R , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, restart_binding, shell);
+  
+  weston_compositor_add_key_binding(helper->compositor, KEY_T , MODIFIER_SUPER | MODIFIER_SHIFT, terminal_binding, shell);
+  
+  weston_compositor_add_key_binding(helper->compositor, KEY_HOMEPAGE, 0, browser_binding, shell);
+  
 }
 
 static void
@@ -1189,13 +1311,13 @@ static const struct shell_helper_interface helper_implementation = {
 	shell_helper_add_surface_to_layer,
 	shell_helper_set_panel,
 	shell_helper_slide_surface,
-      	shell_helper_change_gamma,
-      	shell_helper_bind_key_panel,
-        shell_helper_keyboard_focus_surface,
+  shell_helper_change_gamma,
+  shell_helper_bind_key_panel,
+  shell_helper_keyboard_focus_surface,
 	shell_helper_slide_surface_back,
 	shell_helper_curtain,
-        shell_helper_launch_exposay,
-        shell_helper_toggle_inhibit
+  shell_helper_launch_exposay,
+  shell_helper_toggle_inhibit
 };
 
 static void
@@ -1217,6 +1339,35 @@ helper_destroy(struct wl_listener *listener, void *data)
 		container_of(listener, struct shell_helper, destroy_listener);
 
 	free(helper);
+}
+
+
+static void setup_shm(int shm_command) {
+  //shm create
+  
+  const char *name = "/wayward-shared_mem"; 
+  static int shm_fd = 0;
+  static int shm_init = 0;
+  static void *ptr;
+  if(shm_init < 1) {
+    shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+    ftruncate(shm_fd, sizeof(int) );  
+    ptr = mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    shm_init = 1;
+  }
+  
+  
+  if(ptr < 0)
+  {
+      perror("Mapping failed");
+      exit(0);
+  }
+  int test = shm_command;
+  memcpy((int*)ptr, &test, sizeof(int));
+  
+  memcpy(&test, (int *)ptr, sizeof(int));
+  
+  printf("SHM is %d \n", test);  
 }
 
 WL_EXPORT int
@@ -1256,6 +1407,9 @@ wet_module_init(struct weston_compositor *ec,
 	if (wl_global_create(ec->wl_display, &shell_helper_interface, 1,
 			     helper, bind_helper) == NULL)
 		return -1;
+  
+  
+  setup_shm(SHM_START);
 
 	return 0;
 }
@@ -1478,12 +1632,6 @@ exposay_close(struct desktop_shell *shell)
   
   esurface->mask_view = NULL;
   esurface->mask_surface = NULL;
-  //
-  //
-  
-  
-  
-  
   
   shell->exposay.focus_current = NULL;
   shell->exposay.focus_prev = NULL;
@@ -1609,29 +1757,7 @@ exposay_highlight_surface(struct desktop_shell *shell,
         //weston_matrix_scale(&esurface->transform.matrix, 2, 2, 1.0f);
         esurface->scaled = 1;
         
-        
-
-        /*
-        
-        
-//        weston_surface_set_size(esurface->view->surface, 200, 200);
-        esurface->view->surface->width = 200;
-        esurface->view->surface->height = 200;
-        weston_view_geometry_dirty(esurface->view);
-
-        
-        
-        //weston_view_set_position(esurface->view, esurface->x, esurface->y-20);
-        weston_view_update_transform(esurface->view); 
-        */
-        /*
-        if(!exposay_is_animating(shell)) {
-          weston_move_scale_run(esurface->view,
-	                      esurface->x - esurface->view->geometry.x,
-	                      esurface->y - esurface->view->geometry.y,
-			      1.0, esurface->scale, ,
-	                      NULL, esurface);
-	}*/
+     
 
 	
 }
@@ -1837,14 +1963,6 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 			highlight = esurface;
     }
 
-                /*
-                esurface->view->surface->width = 150;
-                esurface->view->surface->height = 150;
-	        weston_view_set_position(esurface->view, esurface->x, esurface->y);
-                weston_view_geometry_dirty(esurface->view);
-                weston_view_update_transform(esurface->view);
-                weston_view_schedule_repaint(view);
-                */
     esurface->scaled = 0;
     exposay_animate_in(esurface);
     //esurface->scaled = 1;
@@ -2233,10 +2351,6 @@ exposay_transition_active(struct desktop_shell *shell)
 		//	animate = true;
 	}
 
-  /*
-	return animate ? EXPOSAY_LAYOUT_ANIMATE_TO_OVERVIEW
-		       : EXPOSAY_LAYOUT_OVERVIEW;
-  */
   return EXPOSAY_LAYOUT_OVERVIEW;
   
 }

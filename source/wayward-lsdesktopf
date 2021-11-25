@@ -1,8 +1,43 @@
-#!/bin/sh
+#!/bin/bash
 
 
 mkdir -p $HOME/.cache
+ICON='/usr/share/icons/Adwaita/48x48/mimetypes/package-x-generic.png'
+array=()
+array1=()
+#while IFS=  read -r -d $'\0'; do
+#    array+=("$REPLY")
+#ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p'
 
-ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p' > $HOME/.cache/wayward-menus
+mapfile -d $'\n' array < <(ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p')
 
-#exit;
+for i in "${array[@]}"
+do
+  
+  
+  NODISPLAY=`cat $i | grep NoDisplay`
+  
+  if [[ -z "$NODISPLAY" ]]; then
+    LOCAL_ICON=`cat $i | grep Icon= | sed 's/Icon=//g' `
+    echo $LOCAL_ICON
+    #echo -n "$i"
+    array1+=(${i})
+    if [ ! -f ${LOCAL_ICON} ]; then
+      array1+=(${ICON})
+    else
+      array1+=(${LOCAL_ICON})
+    fi
+    #else
+    #echo $NODISPLAY
+  fi
+   
+   
+   # or do whatever with individual element of the array
+done
+
+#echo -n "${array1[*]}"
+
+for i in "${array1[@]}"
+do
+  echo "$i"
+done

@@ -1,13 +1,13 @@
 pkgname=wayward
-pkgver=0.9.0
-pkgrel=1
+pkgver=1.0.2
+pkgrel=2
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"
 
 license=('GPL')
 provides=("wayward")
-depends=("weston" "gtk3" "adwaita-icon-theme" "ttf-droid")
+depends=("weston" "librsvg" "adwaita-icon-theme" "ttf-droid")
 
 makedepends=( "fakeroot" "gcc")
 
@@ -19,12 +19,12 @@ prepare() {
 }
 
 build() {
-	cd "$srcdir/source"
+	cd "$srcdir/source/source"
 	sh build.sh
 }
 
 package() {
-	cd "$srcdir/source"
+	cd "$srcdir/source/source"
 
 	sh install.sh $pkgdir
   rm -rf $srcdir

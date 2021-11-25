@@ -1,0 +1,63 @@
+#!/bin/bash
+
+stringContains() { [ -z "${2##*$1*}" ]; }
+
+mkdir -p $HOME/.cache
+rm $HOME/.cache/wayward-menus
+
+BACKUP_ICON='/usr/share/icons/Adwaita/32x32/mimetypes/package-x-generic.png'
+array=()
+array1=()
+#while IFS=  read -r -d $'\0'; do
+#    array+=("$REPLY")
+#ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p'
+
+mapfile -d $'\n' array < <(ls -rd -a /usr/share/applications/* | sort --ignore-case | sed -n -r -e 's|.*(/usr/share/applications/.*desktop).*$|\1|p')
+
+for i in "${array[@]}"
+do
+  
+  
+  NODISPLAY=`cat $i | grep NoDisplay`
+  
+  if [[ -z "$NODISPLAY" ]]; then
+    LOCAL_EXE=`cat $i | grep ^Exec= | head -1 | sed 's/Exec=//g' | sed 's/%.//' | sed -e 's/--.*//' `
+    first_char_exe=${LOCAL_EXE:0:1}
+     
+    LOCAL_ICON=`cat $i | grep Icon= | sed 's/Icon=//g' `
+    #echo $LOCAL_ICON
+    #echo -n "$i"
+
+    if [[ "$first_char_exe" = "/" ]]; then
+      array1+=("${LOCAL_EXE}")
+    else
+      array1+=("/usr/bin/${LOCAL_EXE}")
+    fi
+    
+    if [ ! -f ${LOCAL_ICON} ]; then
+    
+      if [ ! -f "/usr/share/icons/hicolor/scalable/apps/${LOCAL_ICON}.svg" ]; then
+        if [ ! -f "/usr/share/pixmaps/${LOCAL_ICON}.png" ]; then
+          array1+=(${BACKUP_ICON})
+        else  
+          array1+=("/usr/share/pixmaps/${LOCAL_ICON}.png")
+        fi
+      else
+        array1+=("/usr/share/icons/hicolor/scalable/apps/${LOCAL_ICON}.svg")
+      fi
+    else
+      array1+=("${LOCAL_ICON}")
+    fi
+
+  fi
+   
+   
+   # or do whatever with individual element of the array
+done
+
+
+
+for i in "${array1[@]}"
+do
+  echo "$i" >> $HOME/.cache/wayward-menus
+done

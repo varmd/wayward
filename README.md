@@ -2,11 +2,11 @@
 
 ## Features
 
-* Lightweight, only 50-70MB memory usage
-* Bottom launch panel with autohide, time, date, volume control, and restart/shutdown buttons.
+* Lightweight, only 20-37MB memory usage for one FHD monitor
+* Bottom launch panel with autohide, time, date, volume control, battery indicator, and restart/shutdown buttons.
 * Button to prevent monitor standby when playing videos
 * No X11 dependencies, Xwayland is not required
-* Only 4 dependencies
+* No GTK or QT requirement
 
 ----
 ## Screenshot
@@ -22,7 +22,7 @@ You can download a precompiled package from https://github.com/varmd/wayward/rel
 
 ## Installation
 
-Download repository, extract and makepkg, then 
+Download repository, extract and makepkg, then
 
     pacman -U wayward*pkg*
 
@@ -31,7 +31,7 @@ Download repository, extract and makepkg, then
 Add weston to ~/.bash_profile or /etc/profile.d/weston.sh
 
     echo "weston" >> ~/.bash_profile
-    
+
 Or
 
     echo "weston" > /etc/profile.d/weston.sh
@@ -47,49 +47,53 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
 * weston and wayland
 * ttf-droid and adwaita-icon-theme
-* gtk3
+* librsvg and cairo
 * sudo
 
 ----
 ## Keyboard shortcuts
 
 * `Super + a` - See list of open applications. Use cursor or mouse to select. Press q to close an open app, right click to close an open app
-* `Super + f` - Open app launcher
+* `Super + e` - Open app panel. Use mouse or Tab, cursor keys <- -> to navigate
 * `Volume mute` - Mute volume
 * `Volume up` - Volume up
 * `Volume down` - Volume down
-* `Super + Shift + T` - Launch weston-terminal
+* `Super + Shift + T` - Launch wayward-terminal
 * `Browser key` - Launch browser
 * `Super + Ctrl + Alt + s` - Shutdown
 * `Super + Ctrl + Alt + r` - Restart
 
-## Changing apps in quick launch bars
+## Hiding apps in the app panel
 
-Use gsettings to modify and restart the program. E.g.
+Edit weston.ini and add hide-apps to the shell section. For example
 
-    gsettings set org.weston.wayward favorites "['mpv.desktop', 'firefox.desktop']"
+    hide-apps=mpv,zathura,file-roller
+
 
 ## Changing wallpaper
 
-Copy wallpaper file to ~/.config/wayward-wallpaper.jpg. Wallpaper file is checked every 30 seconds for changes. Removing ~/.config/wayward-wallpaper.jpg will remove the wallpaper.
+Wallpapers are changed from weston.ini. See weston.ini documentation
 
-## Environment variables
+## Workspaces
 
-Use `export WAYWARD_PANEL_MONITOR=n` to specify monitor number where the global panel will be placed. Needs to be placed before the call to weston.
+Workspaces can be enabled from weston.ini. See weston.ini documentation
 
 ## Changelog
 
-0.9   - Add keyboard shortcuts for volume and shutdown.
+1.0   - Remove GTK due to bugs and incompatible API with weston
+
+0.9   - Add keyboard shortcuts for volume and shutdown
 
 0.8.3 - Add initial multi-monitor support
 
-0.8 - Add battery indicator
+0.8   - Add battery indicator
 
 ----
 ## Known issues and limitations
 
-* Basic multimonitor support, needs to be the same resolution
-* Need to restart weston after a new app installation to see the new app in the app launcher.
+* If there are large number of applications in /usr/share/applications, app icons will overlap with system icons. This can be fixed by hiding apps in weston.ini.
+* Basic multimonitor support - not tested after GTK removal
+* Need to restart weston after a new app installation to see the new app in the app panel.
 
 
 

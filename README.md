@@ -3,10 +3,10 @@
 ## Features
 
 * Lightweight, only 20-37MB memory usage for one FHD monitor
-* Bottom launch panel with autohide, time, date, volume control, battery indicator, and restart/shutdown buttons.
+* Bottom app launch panel with autohide, time, date, volume control, battery indicator, and restart/shutdown buttons.
 * Button to prevent monitor standby when playing videos
 * No X11 dependencies, Xwayland is not required
-* No GTK or QT requirement
+* No GTK or QT required
 
 ----
 ## Screenshot
@@ -72,11 +72,11 @@ Edit weston.ini and add hide-apps to the shell section. For example
 
 ## Changing wallpaper
 
-Wallpapers are changed from weston.ini. See weston.ini documentation
+Wallpapers are changed from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-background-image
 
 ## Workspaces
 
-Workspaces can be enabled from weston.ini. See weston.ini documentation
+Workspaces can be enabled from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-num-workspaces
 
 ## Changelog
 
@@ -92,8 +92,9 @@ Workspaces can be enabled from weston.ini. See weston.ini documentation
 ## Known issues and limitations
 
 * If there are large number of applications in /usr/share/applications, app icons will overlap with system icons. This can be fixed by hiding apps in weston.ini.
-* Basic multimonitor support - not tested after GTK removal
-* Need to restart weston after a new app installation to see the new app in the app panel.
+* Misconfigured or broken audio such as AMD HDMI audio can cause crash on startup. As a workaround audio setup should be fixed. For example for AMD HDMI audio built-in soundcard can be used as a workaround - e.g by setting snd_hda_intel.index=1,0 if built in soundcard comes as second when running aplay -l
+* Multimonitor support - not tested after removal of GTK
+* Need to restart weston after a new app installation to see the new app icon in the panel.
 
 
 

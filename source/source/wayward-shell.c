@@ -2828,15 +2828,16 @@ void clock_volume_up () {
   
   volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume + WAYWARD_AUDIO_STEP)));
   //volume_set( ((double)(global_desktop->current_volume + 5)));
-  
-  snd_mixer_handle_events (global_desktop->mixer_handle);
-  snd_mixer_selem_get_playback_volume(global_desktop->mixer,
-  0, &global_desktop->current_volume);
-  
-  global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
-  
-  printf("Volume post-up is %d \n", global_desktop->current_volume);
-
+  if (global_desktop->mixer != NULL)
+  {
+    snd_mixer_handle_events (global_desktop->mixer_handle);
+    snd_mixer_selem_get_playback_volume(global_desktop->mixer,
+    0, &global_desktop->current_volume);
+    
+    global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
+    
+    printf("Volume post-up is %d \n", global_desktop->current_volume);
+  }
 }
 
 void clock_volume_down () {
@@ -2848,16 +2849,20 @@ void clock_volume_down () {
   
   volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume - WAYWARD_AUDIO_STEP)) );  
   
-  snd_mixer_handle_events (global_desktop->mixer_handle);
-  snd_mixer_selem_get_playback_volume (global_desktop->mixer,
-  0, &global_desktop->current_volume);
-  
-  global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
+  if (global_desktop->mixer != NULL)
+  {
+    snd_mixer_handle_events (global_desktop->mixer_handle);
+    snd_mixer_selem_get_playback_volume (global_desktop->mixer,
+    0, &global_desktop->current_volume);
+    
+    global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
+    printf("Volume post-down is %d \n", global_desktop->current_volume);
+  }
   
   if(global_desktop->current_volume_percentage < 7 )
     volume_set(0);    
   
-  printf("Volume post-down is %d \n", global_desktop->current_volume);
+  
 
 }
 
@@ -3143,6 +3148,9 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   panel->shutdown_launcher->force_x = WAYWARD_HIDE_X;
   widget_schedule_redraw(panel->reboot_launcher->widget);
   widget_schedule_redraw(panel->shutdown_launcher->widget);
+  
+  if(global_desktop->mixer_handle == NULL)
+    return;
   
   //Add plus/minus button
   panel->volumedown_launcher = panel_add_launcher(panel,

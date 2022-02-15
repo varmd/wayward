@@ -1541,12 +1541,11 @@ exposay_activate(struct desktop_shell *shell)
   }
 
   struct exposay_surface *esurface = shell->exposay.focus_current;
-  weston_view_activate(esurface->view, shell->exposay.seat, WESTON_ACTIVATE_FLAG_CONFIGURE);
+  weston_view_activate_input(esurface->view, shell->exposay.seat,
+    WESTON_ACTIVATE_FLAG_CONFIGURE);
 
-
-	
-
-	new_layer_link = &shell->exposay.workspace->layer.view_list;
+  
+  new_layer_link = &shell->exposay.workspace->layer.view_list;
 
 	if (new_layer_link == NULL)
 		return;

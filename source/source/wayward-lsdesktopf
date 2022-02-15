@@ -24,7 +24,7 @@ do
     LOCAL_EXE=`cat $i | grep ^Exec= | head -1 | sed 's/Exec=//g' | sed 's/%.//' | sed -e 's/--.*//' `
     first_char_exe=${LOCAL_EXE:0:1}
      
-    LOCAL_ICON=`cat $i | grep Icon= | sed 's/Icon=//g' `
+    LOCAL_ICON=`cat $i | grep Icon= | head -1 | sed 's/Icon=//g' `
     #echo $LOCAL_ICON
     #echo -n "$i"
 

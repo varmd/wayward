@@ -80,6 +80,8 @@ Workspaces can be enabled from weston.ini. See weston.ini documentation - https:
 
 ## Changelog
 
+1.0.3 - Update to Weston 10.0
+
 1.0   - Remove GTK due to bugs and incompatible API of GTK4 with weston
 
 0.9   - Add keyboard shortcuts for volume and shutdown

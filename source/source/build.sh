@@ -11,7 +11,7 @@ cd `dirname $0`
 
 
 GTK_CFLAGS="-std=c11 -pthread \
--I/usr/include/libweston-9/ \
+-I/usr/include/libweston-10/ \
 -I. \
 -I.. \
 -I../shared/ \
@@ -27,9 +27,6 @@ GTK_CFLAGS="-std=c11 -pthread \
 "
 
 GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound  -lrsvg-2 -ljpeg -lm -lrt " 
-
-
-
 
 
 cd `dirname $0`
@@ -78,7 +75,7 @@ gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURC
 
 gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm -lEGL -lGLESv2   -o wayward
 
-WESTON_VER=9
+WESTON_VER=10
 
 gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -lweston-desktop-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
 

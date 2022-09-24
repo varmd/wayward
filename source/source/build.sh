@@ -1,5 +1,7 @@
 #!/bin/bash
 
+WESTON_VER=11
+
 cd `dirname $0`
 
 #mkdir gen
@@ -11,7 +13,7 @@ cd `dirname $0`
 
 
 GTK_CFLAGS="-std=c11 -pthread \
--I/usr/include/libweston-10/ \
+-I/usr/include/libweston-${WESTON_VER}/ \
 -I. \
 -I.. \
 -I../shared/ \
@@ -26,16 +28,16 @@ GTK_CFLAGS="-std=c11 -pthread \
 -Igen-protocol
 "
 
-GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound  -lrsvg-2 -ljpeg -lm -lrt " 
+GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound  -lrsvg-2 -ljpeg -lm -lrt "
 
 
 cd `dirname $0`
 
-  
+
   CLIENT_SOURCES="\
     terminal.c \
   "
-  
+
   WINDOW_SOURCES="\
 	window.c				\
   ../shared/file-util.c \
@@ -54,19 +56,19 @@ cd `dirname $0`
   gen-protocol/weston-desktop-shell-code.c \
   gen-protocol/shell-helper-protocol.c
 	"
-  
+
   SIMLE_EGL_SOURCES="\
     simple-egl.c \
   "
-  
+
   SIMLE_SHM_SOURCES="\
     simple-shm.c \
   "
-  
+
   WAYWARD_SOURCES="\
     wayward-shell.c \
   "
-  
+
   SHELL_HELPER_SOURCES="\
     shell-helper.c \
   "
@@ -75,9 +77,9 @@ gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURC
 
 gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm -lEGL -lGLESv2   -o wayward
 
-WESTON_VER=10
 
-gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -lweston-desktop-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
+
+gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
 
 #make
 echo OK!

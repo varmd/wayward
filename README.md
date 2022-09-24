@@ -74,11 +74,9 @@ Edit weston.ini and add hide-apps to the shell section. For example
 
 Wallpapers are changed from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-background-image
 
-## Workspaces
-
-Workspaces can be enabled from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-num-workspaces
-
 ## Changelog
+
+1.1.0 - Update to Weston 11.0. Remove workspaces as Weston 11 removed them.
 
 1.0.3 - Update to Weston 10.0
 

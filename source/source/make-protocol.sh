@@ -5,6 +5,7 @@ declare -a arr=(
   "/usr/share/wayland-protocols/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml"
   "/usr/share/wayland-protocols/unstable/relative-pointer/relative-pointer-unstable-v1.xml"
       "../protocol/text-cursor-position.xml"
+      "../protocol/weston-desktop-shell.xml"
 )
 
 ## now loop through the above array

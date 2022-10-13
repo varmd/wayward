@@ -7,7 +7,7 @@ url="https://github.com/varmd/wayward"
 
 license=('GPL')
 provides=("wayward")
-depends=("weston" "librsvg" "adwaita-icon-theme" "ttf-droid")
+depends=("weston" "librsvg" "adwaita-icon-theme" "ttf-droid" "alsa-lib")
 
 makedepends=( "fakeroot" "gcc")
 

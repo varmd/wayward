@@ -95,8 +95,11 @@ struct exposay_surface {
 	struct wl_listener view_destroy_listener;
 	struct wl_list link;
 
+  struct weston_buffer_reference *mask_buffer_ref;
+
   struct weston_surface *mask_surface;
   struct weston_view *mask_view;
+
 
 
 	int x;
@@ -1574,6 +1577,7 @@ exposay_descale(struct exposay_surface *esurface)
 
     weston_view_destroy(esurface->mask_view);
     weston_surface_unref(esurface->mask_surface);
+    weston_buffer_destroy_solid(esurface->mask_buffer_ref);
     esurface->mask_surface = NULL;
     esurface->mask_view = NULL;
 
@@ -1637,7 +1641,7 @@ exposay_highlight_surface(struct desktop_shell *shell,
                           struct exposay_surface *esurface)
 {
 
-  struct weston_buffer_reference *mask_buffer_ref;
+
   struct exposay_surface *tmp_esurface;
 
 
@@ -1679,7 +1683,7 @@ exposay_highlight_surface(struct desktop_shell *shell,
   int green = 134;
   int blue = 222;
 
-  mask_buffer_ref = weston_buffer_create_solid_rgba(shell->compositor,
+  esurface->mask_buffer_ref = weston_buffer_create_solid_rgba(shell->compositor,
 						     red/divider,
 						     green/divider,
 						     blue/divider,
@@ -1695,8 +1699,6 @@ exposay_highlight_surface(struct desktop_shell *shell,
         cairo_fill (esurface->mask_cr);
         */
 
-
-
         wl_list_for_each(tmp_esurface, &global_exposay.surface_list, link) {
 
           if(tmp_esurface->highlight) {
@@ -1705,8 +1707,8 @@ exposay_highlight_surface(struct desktop_shell *shell,
             weston_view_geometry_dirty(tmp_esurface->mask_view);
             weston_view_damage_below(tmp_esurface->mask_view);
 
-            weston_view_geometry_dirty(tmp_esurface->view);
-            weston_view_damage_below(tmp_esurface->view);
+//            weston_view_geometry_dirty(tmp_esurface->view);
+//            weston_view_damage_below(tmp_esurface->view);
 
             tmp_esurface->highlight = 0;
 
@@ -1727,17 +1729,12 @@ exposay_highlight_surface(struct desktop_shell *shell,
           esurface->mask_surface->width = esurface->width;
           esurface->mask_surface->height = 15;
 
-          weston_surface_attach_solid(esurface->mask_view->surface, mask_buffer_ref,
+          weston_surface_attach_solid(esurface->mask_view->surface, esurface->mask_buffer_ref,
             esurface->mask_surface->width,
 				    esurface->mask_surface->height
 				  );
 
-          //pixman_region32_fini(&esurface->mask_surface->input);
-          //pixman_region32_init(&esurface->mask_surface->input);
-
 				  weston_surface_map(esurface->mask_surface);
-
-
         }
 
         weston_view_set_position(esurface->mask_view, esurface->x, esurface->y + esurface->height - esurface->mask_surface->height + 1);

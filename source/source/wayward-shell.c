@@ -42,7 +42,16 @@
 
 #include <cairo.h>
 #include <cairo-svg.h>
-#include <librsvg/rsvg.h>
+#include <glib.h>
+
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
+//#include "nanosvg/stb_image_write.h"
+
+#define NANOSVG_ALL_COLOR_KEYWORDS	// Include full list of color keywords.
+#define NANOSVG_IMPLEMENTATION
+#include "nanosvg/nanosvg.h"
+#define NANOSVGRAST_IMPLEMENTATION
+#include "nanosvg/nanosvgrast.h"
 
 //cairo scale
 
@@ -88,7 +97,7 @@ typedef gint64 gfixed;
 #define WAYWARD_INITIAL_HEIGHT 52
 #define WAYWARD_PANEL_LEAVE_BUG_Y 47
 #define WAYWARD_ICON_SIZE 32
-#define WAYWARD_AUDIO_STEP 4
+#define WAYWARD_AUDIO_STEP 3
 #define WAYWARD_BATTERY_X 345
 #define WAYWARD_BATTERY_Y 30
 
@@ -125,21 +134,21 @@ struct desktop {
 
 	struct window *grab_window;
 	struct widget *grab_widget;
-  
+
   struct shell_helper *helper;
   struct wl_seat *seat;
   struct wl_pointer *pointer;
   struct wl_keyboard *keyboard;
-  
+
   snd_mixer_t *mixer_handle;
   snd_mixer_elem_t *mixer;
   long min_volume, max_volume;
-  
+
   long current_volume;
   double current_volume_percentage;
-  
+
   struct toytimer shm_timer;
-  
+
   struct panel *panel;
 
 	struct weston_config *config;
@@ -162,7 +171,7 @@ struct output;
 struct panel_label {
 	struct widget *widget;
 	struct panel *panel;
-  
+
   int force_x;
 };
 
@@ -174,31 +183,31 @@ struct panel {
 	struct window *window;
 	struct widget *widget;
 	struct wl_list launcher_list;
-  
+
 	struct wl_surface *wl_surface;
-  
-  
-  
+
+
+
 	struct panel_clock *clock;
 	struct panel_clock *battery;
-  
+
   struct rectangle clock_allocation;
-  
+
   struct panel_launcher *reboot_launcher;
   struct panel_launcher *shutdown_launcher;
-  
+
   struct panel_launcher *volumedown_launcher;
   struct panel_launcher *volumeup_launcher;
   struct panel_label *volume_label;
-  
-  
+
+
 	int painted;
 	int allocation_set;
 	enum weston_desktop_shell_panel_position panel_position;
 	enum clock_format clock_format;
-  
+
   enum clock_state clock_state;
-  
+
 	uint32_t color;
 };
 
@@ -233,7 +242,7 @@ struct panel_launcher {
 	int focused, pressed, toggled;
   int force_x;
   int initial_x;
-  
+
   char *path;
 	struct wl_list link;
 	struct wl_array envp;
@@ -247,7 +256,7 @@ struct panel_clock {
 	struct toytimer timer;
 	char *format_string;
 	time_t refresh_timer;
-  
+
   int force_x;
 };
 
@@ -326,7 +335,7 @@ static const char keycode_to_vkey[] =
     0,                 /* KEY_APOSTROPHE		40 */
     0,                 /* KEY_GRAVE		41 */
     0,                 /* KEY_LEFTSHIFT		42 */
-    
+
     0,                 /* KEY_BACKSLASH		43 */
     'Z',                 /* KEY_Z			44 */
     'X',                 /* KEY_X			45 */
@@ -421,10 +430,10 @@ panel_launcher_activate(struct panel_launcher *widget)
 {
 	char **argv;
 	pid_t pid;
-  
+
   if(widget->function && widget->focused) {
     widget->function(widget);
-    return;  
+    return;
   }
 
 	pid = fork();
@@ -454,16 +463,14 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 	struct panel_launcher *launcher = data;
 	struct rectangle allocation;
 	cairo_t *cr;
-  
+
 	cr = widget_cairo_create(launcher->panel->widget);
-  
+
 	widget_get_allocation(widget, &allocation);
-  
-  
-  
+
   allocation.x += allocation.width / 2 -
 		cairo_image_surface_get_width(launcher->icon) / 2;
-  
+
 	if (allocation.width > allocation.height)
 		allocation.x += allocation.width / 2 - allocation.height / 2;
 	allocation.y += allocation.height / 2 -
@@ -474,17 +481,17 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 		allocation.x++;
 		allocation.y++;
 	}
-  
+
   //special case to hide launchers for clock section
   if(launcher->force_x) {
-    allocation.x = launcher->force_x;    
-  }  
-  
-  //printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
+    allocation.x = launcher->force_x;
+  }
 
+  //printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
+  //cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
 	cairo_set_source_surface(cr, launcher->icon,
 				 allocation.x, allocation.y);
-  
+
   cairo_paint(cr);
 
 	if (launcher->focused || launcher->toggled) {
@@ -501,7 +508,7 @@ panel_launcher_motion_handler(struct widget *widget, struct input *input,
 			      uint32_t time, float x, float y, void *data)
 {
 	struct panel_launcher *launcher = data;
- 
+
   //TODO
   //fix subsurface leaving causing panel to hide
   //printf("Y is %d \n", (int)y);
@@ -531,20 +538,20 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
 	int count = 0;
 
 	if (state != WL_KEYBOARD_KEY_STATE_RELEASED) {
-    return;  
+    return;
   }
 
   switch (key) {
-    
+
     case KEY_ENTER:
     case KEY_SPACE:
       wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
       if(launcher->focused) {
         launcher->focused = 0;
         widget_schedule_redraw(launcher->widget);
-        
+
         panel_launcher_activate(launcher);
-        
+
         //shell_helper_keyboard_focus_surface(global_desktop->helper, global_desktop->background->wl_surface);
         if(!launcher->function)
           wayland_pointer_leave_cb(NULL, NULL, 0, global_desktop->panel->wl_surface);
@@ -565,8 +572,8 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
         if(launcher->focused) {
           launcher->focused = 0;
           widget_schedule_redraw(launcher->widget);
-          flag = 1;        
-        }  
+          flag = 1;
+        }
       }
       //loop after end
       if(flag) {
@@ -579,7 +586,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
     break;
     case KEY_LEFT:
     wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
-      
+
       if(launcher->focused) {
         launcher->focused = 0;
         widget_schedule_redraw(launcher->widget);
@@ -593,31 +600,31 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
       prev_launcher = launcher;
     }
     break;
-    
+
     default:
     break;
   }
 
 
-	
+
 }
 
 
-static void panel_focus_handler(struct window *window, 
+static void panel_focus_handler(struct window *window,
     struct input *device, void *data) {
-  
+
   struct panel_launcher *launcher;
   int flag = 0;
-      
+
   if(!device) {
-    return;  
+    return;
   }
-  shell_helper_move_surface (global_desktop->helper, 
+  shell_helper_move_surface (global_desktop->helper,
     global_desktop->panel->wl_surface,
-    WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT 
+    WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
   );
-  
-  
+
+
   wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
     if(!flag) {
       launcher->focused = 1;
@@ -625,7 +632,7 @@ static void panel_focus_handler(struct window *window,
       return;
     }
   }
-  
+
 }
 
 static int
@@ -633,9 +640,9 @@ panel_enter_handler(struct widget *widget, struct input *input,
 			     float x, float y, void *data)
 {
 	struct panel *panel = data;
-  
-  
-  
+
+
+
 }
 
 static void
@@ -651,7 +658,7 @@ panel_redraw_handler(struct widget *widget, void *data)
 	cairo_surface_t *surface;
 	cairo_t *cr;
 	struct panel *panel = data;
-  
+
   if(panel->painted) {
     printf("Already painted \n");
     return;
@@ -751,24 +758,24 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 	time_t rawtime;
 	struct tm * timeinfo;
 	char string[128];
-  
+
 	time(&rawtime);
 	timeinfo = localtime(&rawtime);
 	strftime(string, sizeof string, clock->format_string, timeinfo);
-  
+
 	widget_get_allocation(widget, &allocation);
 	if (allocation.width == 0)
 		return;
 
-  
+
   clock->panel->painted = 0;
 	cr = widget_cairo_create(clock->panel->widget);
 	cairo_set_font_size(cr, 22);
-  
+
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
 				CAIRO_FONT_WEIGHT_NORMAL);
-  
+
 	cairo_text_extents(cr, string, &extents);
 	if (allocation.x > 0)
 		allocation.x +=
@@ -776,10 +783,10 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 	else
 		allocation.x +=
 			allocation.width / 2 - extents.width / 2;
-  
+
   if(clock->force_x)
     allocation.x = clock->force_x;
-  
+
 	allocation.y += allocation.height / 2 - 1 + extents.height / 2;
 	//cairo_move_to(cr, allocation.x + 1, allocation.y + 1);
 	//cairo_set_source_rgba(cr, 0, 0, 0, 0.85);
@@ -825,7 +832,7 @@ panel_add_clock(struct panel *panel)
 
 	clock = xzalloc(sizeof *clock);
 	clock->force_x = 0;
-  
+
 	clock->panel = panel;
 	panel->clock = clock;
 
@@ -864,15 +871,15 @@ panel_resize_handler(struct widget *widget,
 {
 	struct panel_launcher *launcher;
 	struct panel *panel = data;
-  
+
   if(panel->painted) {
     printf("Panel is already painted, not resizing \n");
     return;
   }  else {
     printf("Resizing panel \n");
   }
-  
-  
+
+
 	int x = 0;
 	int y = 0;
 	int w = height > width ? width : height;
@@ -884,7 +891,7 @@ panel_resize_handler(struct widget *widget,
   int _count = 0;
   int _count2 = 5;
   struct rectangle allocation;
-  
+
   if(!panel->allocation_set) {
     wl_list_for_each(launcher, &panel->launcher_list, link) {
       //Special case for shutdown/volume icons
@@ -895,7 +902,7 @@ panel_resize_handler(struct widget *widget,
         widget_set_allocation(launcher->widget, launcher->initial_x, y,
           w + first_pad_w + 1, h + first_pad_h + 1);
       }
-      
+
       if (horizontal)
         x += w + first_pad_w;
       else
@@ -915,7 +922,7 @@ panel_resize_handler(struct widget *widget,
 	else
 		y = height - (h = DEFAULT_SPACING * 3);
 
-  
+
 	if (panel->clock) {
     if(!panel->clock->force_x)
 		  widget_set_allocation(panel->clock->widget,
@@ -923,12 +930,12 @@ panel_resize_handler(struct widget *widget,
     else
       widget_set_allocation(panel->clock->widget,
 				      panel->clock->force_x, y, w + 1, h + 1);
-    
+
     if(panel->clock_allocation.width == 0)
       widget_get_allocation(panel->clock->widget, &panel->clock_allocation);
-    
+
     widget_get_allocation(panel->clock->widget, &allocation);
-    
+
     //Special allocation x for volume/system launchers
     if(!panel->allocation_set) {
       wl_list_for_each(launcher, &panel->launcher_list, link) {
@@ -937,7 +944,7 @@ panel_resize_handler(struct widget *widget,
           launcher->force_x = panel->clock_allocation.x - 20 - allocation.width * _count2;
           widget_set_allocation(launcher->widget, launcher->force_x, allocation.y,
           allocation.width, allocation.height);
-          
+
           _count2--;
         }
         _count++;
@@ -960,7 +967,7 @@ panel_configure(void *data,
 	struct surface *surface = window_get_user_data(window);
 	struct panel *panel = container_of(surface, struct panel, base);
 	struct output *owner;
-  
+
   printf("Resizing panel \n");
 
 	if (width < 1 || height < 1) {
@@ -1051,19 +1058,19 @@ panel_create(struct desktop *desktop, struct output *output)
 
   //TODO
   //disable for now
-  
+
 	window_set_keyboard_focus_handler(panel->window, panel_focus_handler);
 	window_set_key_handler(panel->window, panel_key_handler);
 	//widget_set_enter_handler(panel->widget, panel_enter_handler);
 	//widget_set_leave_handler(panel->widget, panel_leave_handler);
-  
+
 	widget_set_redraw_handler(panel->widget, panel_redraw_handler);
 	widget_set_resize_handler(panel->widget, panel_resize_handler);
 
   panel->allocation_set = 0;
-  
+
   panel->clock_allocation = null_allocation;
-  
+
 	panel->panel_position = desktop->panel_position;
 	panel->clock_format = desktop->clock_format;
   panel->clock_state = CLOCK_NONE;
@@ -1079,8 +1086,8 @@ panel_create(struct desktop *desktop, struct output *output)
 					&panel->color, 0xaa000000);
 
 	panel_add_launchers(panel, desktop);
-  
-  
+
+
 
 	return panel;
 }
@@ -1145,21 +1152,18 @@ _cairo_image_surface_scale_nearest (cairo_surface_t *image,
 	gfixed           x_src, y_src;
 	int              x, y;
 
-	
-	
 
-	
 
 	src_width = cairo_image_surface_get_width  (image);
-  
+
 	src_height = cairo_image_surface_get_height (image);
   if(src_width == new_width || src_height == new_height)
     return image;
-  
+
   scaled = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 					     new_width,
 					     new_height);
-  
+
 	p_src = cairo_image_surface_get_data (image);
 	p_dest = cairo_image_surface_get_data (scaled);
 	src_rowstride = cairo_image_surface_get_stride (image);
@@ -1200,12 +1204,120 @@ _cairo_image_surface_scale_nearest (cairo_surface_t *image,
 }
 
 
-static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* file, int height )
-{
-    
-    cairo_surface_t *surface = NULL;
-    RsvgHandle      * handle;
 
+static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filename, int height )
+{
+
+    cairo_surface_t *surface = NULL;
+    cairo_status_t status;
+    int red, green, blue, alpha = 0;
+    NSVGimage *image = NULL;
+  	NSVGrasterizer *rast = NULL;
+  	unsigned char* img_pixels = NULL;
+  	unsigned char* rgba_img_pixels = NULL;
+  	int w, h;
+    char path_buf[1256];
+    int skip_next = 0;
+    static int count = 0;
+
+
+  	image = nsvgParseFromFile(filename, "px", 96.0f);
+  	if (image == NULL) {
+  		printf("Could not open SVG image.\n");
+  		return NULL;
+  	}
+  	w = (int)image->width;
+  	h = (int)image->height;
+  	w = 32;
+  	h = 32;
+  	double scale = (double) height / image->height;
+
+  	rast = nsvgCreateRasterizer();
+  	if (rast == NULL) {
+  		printf("Could not init rasterizer.\n");
+  		return NULL;
+  	}
+
+  	img_pixels = malloc(w*h*4);
+  	rgba_img_pixels = malloc(w*h*4);
+  	if (img_pixels == NULL) {
+  		printf("Could not alloc image buffer.\n");
+  		return NULL;
+  	}
+
+  	int pixel;
+    int size = w * h;
+
+  	//scaleX = width_of_canvas / (float)image->width; scaleY = height_of_canvas / (float)image->height;
+  	//nsvgRasterizeXY(rast, image, 0, 0, scaleX, scaleY, img_data.data(), w, h, w * 4);
+
+
+
+
+
+    snprintf(path_buf, sizeof path_buf, "%s/pngs/%d-svg.png", getenv("HOME"), count);
+    count++;
+
+  	printf("rasterizing image %f x %f -> to 32 32 %f \n",
+  	  image->width, image->height, scale);
+  	nsvgRasterize(rast, image, 0, 0, scale, img_pixels, w, h, w*4);
+
+    //Alphas need to be pre-multiplied
+    //https://gitlab.freedesktop.org/cairo/cairo/-/blob/8f1190dc825ad9ca805c39025dcbcb9aed8b496d/src/cairo.h#L410-411
+    #if 0
+  	printf("writing svg.png\n");
+ 	 stbi_write_png(path_buf, w, h, 4, img_pixels, w*4);
+
+  	surface = cairo_image_surface_create_from_png(path_buf);
+
+
+
+  	status = cairo_surface_status(surface);
+  	if (status == CAIRO_STATUS_SUCCESS) {
+  	  free(img_pixels);
+  		return surface;
+  	}
+    #endif
+
+    int rows = w * h;
+
+    for (unsigned int *rgba_ptr = (unsigned int *)img_pixels,
+      *argb_ptr = (unsigned int *)rgba_img_pixels;
+      rows > 0; rows--, argb_ptr++, rgba_ptr++)
+    {
+        red   = (*rgba_ptr >> 0) & 0xff;
+        green = (*rgba_ptr >> 8) & 0xff;
+        blue  = (*rgba_ptr >> 16) & 0xff;
+        alpha  = (*rgba_ptr >> 24);
+
+        *argb_ptr = blue | green << 8 | red << 16 | alpha << 24;
+    }
+
+    surface = cairo_image_surface_create_for_data ( rgba_img_pixels,
+                                               CAIRO_FORMAT_ARGB32,
+                                               w, h, w*4 );
+    free(img_pixels);
+    //free(rgba_img_pixels);
+    return surface;
+
+
+               /*
+cairo_t *cr = cairo_create ( surface );
+cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1);
+		cairo_mask_surface(cr, surface,
+				   32, 32);
+cairo_destroy ( cr );
+
+*/
+
+    status = cairo_surface_status(surface);
+    if (status == CAIRO_STATUS_SUCCESS) {
+      return surface;
+    }
+    return NULL;
+
+    #if 0
+    RsvgHandle      * handle;
     handle = rsvg_handle_new_from_file ( file, NULL );
     if ( handle != NULL ) {
         RsvgDimensionData dimensions;
@@ -1215,18 +1327,18 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* file, 
         rsvg_handle_get_dimensions ( handle, &dimensions );
         // Create cairo surface in the right size.
         double scale = (double) height / dimensions.height;
-      
+
         #if 0
         printf("%s %f %f %f scale dimensions width height \n", file, scale, dimensions.width, dimensions.height);
         printf("%s %f %f %f scale dimensionsxscale width height \n", file, scale, (double) dimensions.width * scale, (double) dimensions.height * scale);
         #endif
-      
+
         surface = cairo_image_surface_create ( CAIRO_FORMAT_ARGB32,
                                                (double) dimensions.width * scale,
                                                (double) dimensions.height * scale );
-        cairo_status_t status;  
+        cairo_status_t status;
         status = cairo_surface_status(surface);
-        
+
         if (status == CAIRO_STATUS_SUCCESS) {
             cairo_t *cr = cairo_create ( surface );
             cairo_scale ( cr, scale, scale );
@@ -1235,7 +1347,7 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* file, 
         }
 
         rsvg_handle_close ( handle, NULL );
-        
+
 
         #if 0
         if ( G_UNLIKELY ( failed ) ) {
@@ -1248,6 +1360,7 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* file, 
 
 
     return surface;
+    #endif
 }
 
 
@@ -1255,7 +1368,7 @@ static cairo_surface_t *
 load_icon_svg_or_fallback(const char *icon)
 {
 	cairo_surface_t *surface = cairo_image_surface_create_from_svg(icon, WAYWARD_ICON_SIZE);
-	
+
 	cairo_status_t status;
 	cairo_t *cr;
 
@@ -1296,7 +1409,7 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
 	int i, j, k;
 
 	launcher = xzalloc(sizeof *launcher);
-  
+
   if (strstr(icon, ".png") != NULL) {
 	  launcher->icon = load_icon_or_fallback(icon);
 	  launcher->icon = _cairo_image_surface_scale_nearest(launcher->icon, WAYWARD_ICON_SIZE, WAYWARD_ICON_SIZE);
@@ -1304,20 +1417,20 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
     launcher->icon = load_icon_svg_or_fallback(icon);
   }
 	launcher->path = xstrdup(path);
-  
+
   if(initial_x) {
     printf("Launcher initial X is %d \n", initial_x);
     launcher->initial_x = initial_x;
   } else {
     launcher->initial_x = 0;
   }
-  
+
   launcher->toggled = 0;
-  
+
   launcher->function = NULL;
   if(function)
     launcher->function = function;
-  
+
 
 	wl_array_init(&launcher->envp);
 	wl_array_init(&launcher->argv);
@@ -1380,7 +1493,7 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
 				  panel_launcher_redraw_handler);
 	widget_set_motion_handler(launcher->widget,
 				  panel_launcher_motion_handler);
-          
+
   return launcher;
 }
 
@@ -1695,8 +1808,8 @@ desktop_shell_configure(void *data,
 {
 	struct window *window = wl_surface_get_user_data(surface);
 	struct surface *s = window_get_user_data(window);
-  
-  
+
+
 
 	s->configure(data, desktop_shell, edges, window, width, height);
 }
@@ -1826,7 +1939,7 @@ background_create(struct desktop *desktop, struct output *output)
 	}
 
 	free(type);
-  
+
 	return background;
 }
 
@@ -1920,7 +2033,7 @@ output_handle_mode(void *data,
 		   int height,
 		   int refresh)
 {
-  
+
   if(width > global_desktop_width) {
     global_desktop_width = width;
     printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
@@ -1929,14 +2042,14 @@ output_handle_mode(void *data,
     global_desktop_height = height;
     printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
   }
-  
+
   //Set panel initial position
-  
-  shell_helper_move_surface (global_desktop->helper, 
+
+  shell_helper_move_surface (global_desktop->helper,
       global_desktop->panel->wl_surface,
-      WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT 
+      WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
   );
-  
+
 }
 
 static void
@@ -1974,17 +2087,17 @@ output_init(struct output *output, struct desktop *desktop)
 		output->panel = panel_create(desktop, output);
 		surface = window_get_wl_surface(output->panel->window);
     output->panel->wl_surface = surface;
-    
+
 		weston_desktop_shell_set_panel(desktop->shell,
 					       output->output, surface);
-    
+
     shell_helper_set_panel (desktop->helper, surface);
-    
+
     if(!desktop->panel)
       desktop->panel = output->panel;
-    
+
     shell_helper_bind_key_panel(desktop->helper, surface, desktop->seat, desktop->shell);
-    
+
 
 	}
 
@@ -2075,15 +2188,15 @@ void wayland_pointer_enter_cb(void *data,
 		struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface,
 		wl_fixed_t sx, wl_fixed_t sy)
 {
-  
+
   if(!global_desktop || !global_desktop->panel)
     return;
-  
+
   if(surface == global_desktop->panel->wl_surface) {
     global_panel_in = 1;
-    shell_helper_move_surface (global_desktop->helper, 
+    shell_helper_move_surface (global_desktop->helper,
         global_desktop->panel->wl_surface,
-        WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT 
+        WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
     );
   }
 }
@@ -2093,22 +2206,22 @@ void wayland_pointer_leave_cb(void *data,
 {
   if(!global_desktop || !global_desktop->panel || global_panel_in_y > WAYWARD_PANEL_LEAVE_BUG_Y)
     return;
-  
-  
+
+
   if(surface == global_desktop->panel->wl_surface) {
     global_panel_in = 0;
     printf("Moving panel surface left %p %p \n", surface, global_desktop->panel->wl_surface);
-    shell_helper_move_surface (global_desktop->helper, 
+    shell_helper_move_surface (global_desktop->helper,
         global_desktop->panel->wl_surface,
-        WAYWARD_NO_MOVE_X, global_desktop_height - 5  
+        WAYWARD_NO_MOVE_X, global_desktop_height - 5
     );
-    
+
     if(global_desktop->panel->clock_state == VOLUME_SHOWN) {
       launch_volume(global_desktop->panel->volumeup_launcher);
     } else if(global_desktop->panel->clock_state == SYSTEM_SHOWN) {
       launch_system(global_desktop->panel->volumeup_launcher);
     }
-    
+
     window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
   }
 }
@@ -2116,13 +2229,13 @@ void wayland_pointer_leave_cb(void *data,
 
 void wayland_pointer_motion_cb(void *data,
 		struct wl_pointer *pointer, uint32_t time, wl_fixed_t sx, wl_fixed_t sy)
-{ 
-  
+{
+
   //Fix for Weston bug when mouse at the edge of the screen bottom
   if(global_panel_in) {
     global_panel_in_y = wl_fixed_to_int(sy);
   }
-    
+
 }
 
 
@@ -2137,14 +2250,14 @@ void wayland_pointer_button_cb(void *data,
 
 static void wayland_pointer_frame_cb(void *data, struct wl_pointer *wl_pointer) {
   //do nothing
-  
+
 }
 static void wayland_pointer_axis_source_cb(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source)	{
-  
+
   //do nothing
 }
 static void wayland_pointer_axis_stop_cb(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis)	{
-  
+
   //do nothing
 }
 
@@ -2157,24 +2270,24 @@ void wayland_pointer_axis_cb(void *data,
 		struct wl_pointer *pointer, uint32_t time, uint32_t axis,
 		wl_fixed_t value)
 {
-  
+
 }
 
-static const struct wl_pointer_listener pointer_listener_wayland = 
+static const struct wl_pointer_listener pointer_listener_wayland =
       {   wayland_pointer_enter_cb,
           wayland_pointer_leave_cb,
           wayland_pointer_motion_cb,
           wayland_pointer_button_cb,
           wayland_pointer_axis_cb,
-          
+
           /*wayland_pointer_frame_cb,
           wayland_pointer_axis_source_cb,
           wayland_pointer_axis_stop_cb,
           wayland_pointer_axis_discrete_cb,
           */
       };
-      
-      
+
+
 /* Keyboard */
 
 static void keyboard_keymap (void *data, struct wl_keyboard *keyboard, uint32_t format, int32_t fd, uint32_t size) {
@@ -2184,8 +2297,8 @@ static void keyboard_keymap (void *data, struct wl_keyboard *keyboard, uint32_t 
 
 
 static void keyboard_enter (void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
-  
-  
+
+
 
 }
 static void keyboard_leave (void *data, struct wl_keyboard *keyboard, uint32_t serial, struct wl_surface *surface) {
@@ -2196,13 +2309,13 @@ static void keyboard_key (void *data, struct wl_keyboard *keyboard, uint32_t ser
 
 }
 static void keyboard_modifiers (void *data, struct wl_keyboard *keyboard, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group) {
-	
+
 }
 static struct wl_keyboard_listener keyboard_listener = {
-  keyboard_keymap, 
-  keyboard_enter, 
-  keyboard_leave, 
-  keyboard_key, 
+  keyboard_keymap,
+  keyboard_enter,
+  keyboard_leave,
+  keyboard_key,
   keyboard_modifiers
 };
 
@@ -2212,7 +2325,7 @@ seat_handle_capabilities (void *data,
     enum wl_seat_capability caps)
 {
 
-  
+
   struct desktop *desktop = data;
 
   if ((caps & WL_SEAT_CAPABILITY_POINTER) && !desktop->pointer) {
@@ -2232,7 +2345,7 @@ seat_handle_capabilities (void *data,
    } else if (!(caps & WL_SEAT_CAPABILITY_KEYBOARD) && desktop->keyboard) {
     wl_keyboard_destroy(desktop->keyboard);
     desktop->keyboard = NULL;
-    
+
   }
   #endif
   /* TODO: touch */
@@ -2323,7 +2436,7 @@ static void setup_mixer (struct desktop *desktop)
   snd_mixer_selem_id_t *sid;
   int ret;
 
-  
+
   if ((ret = snd_mixer_open (&desktop->mixer_handle, 0)) < 0)
     goto error;
 
@@ -2356,7 +2469,7 @@ static void setup_mixer (struct desktop *desktop)
 
   printf("Mixer volumes are max/min %d/%d \n", desktop->max_volume,
     desktop->min_volume);
-  
+
   return;
 
 error:
@@ -2371,7 +2484,7 @@ error:
 
 //Battery
 void check_battery_exists() {
-  
+
   #if 0
   //TESTING
   global_battery_exists = 1;
@@ -2446,12 +2559,12 @@ percentage_to_alsa_volume (double value)
 }
 
 static void volume_set (double value) {
-  
-  const char *icon_name = NULL;  
-  
+
+  const char *icon_name = NULL;
+
 
   printf("volume value is %f \n", value);
-  
+
   #if 0
   if(value > global_desktop->max_volume ) {
     value = global_desktop->max_volume - 1;
@@ -2459,7 +2572,7 @@ static void volume_set (double value) {
     value = global_desktop->min_volume;
   }
   #endif
-  
+
   if (global_desktop->mixer != NULL)
   {
     snd_mixer_selem_set_playback_volume_all (
@@ -2477,7 +2590,7 @@ static void volume_set (double value) {
     icon_name = "audio-volume-low-symbolic";
   else
     icon_name = "audio-volume-muted-symbolic";
-  
+
   printf("icon_name is %s \n", icon_name);
 
 
@@ -2502,41 +2615,41 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
   char buff[10] = {'\0'};
   int padding_right = 0;
 	int battery_level = 0;
-  
-  
+
+
   if(!battery->panel->allocation_set) {
     return;
   }
-  
+
   fp = fopen(global_battery_path, "r");
   if(fp != NULL) {
-    fgets(buff, 10, (FILE*)fp);   
+    fgets(buff, 10, (FILE*)fp);
     fclose(fp);
-  
-    buff[strlen(buff) - 1] = '\0'; 
+
+    buff[strlen(buff) - 1] = '\0';
     battery_level = buff[0] - '0';
     sprintf(string, "%s%%", buff);
   }
 
 	widget_get_allocation(widget, &allocation);
-	
+
   battery->panel->painted = 0;
 	cr = widget_cairo_create(battery->panel->widget);
 	cairo_set_font_size(cr, 22);
-  
+
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
 				CAIRO_FONT_WEIGHT_NORMAL);
-  
+
 	cairo_text_extents(cr, string, &extents);
-	
+
   if(battery_level == 100) {
     padding_right = 15;
   }
-  
+
   allocation.x = battery->panel->clock_allocation.x - WAYWARD_BATTERY_X - padding_right;
-  
-    
+
+
 	allocation.y = WAYWARD_BATTERY_Y;
 
 	cairo_show_text(cr, string);
@@ -2544,9 +2657,9 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
 	cairo_set_source_rgba(cr, 1, 1, 1, 0.85);
 	cairo_show_text(cr, string);
 	cairo_destroy(cr);
-  
+
   printf("Redrawing battery %d \n", battery_level);
-  
+
 }
 
 static void
@@ -2556,14 +2669,14 @@ panel_add_battery(struct panel *panel)
 
 	battery = xzalloc(sizeof *battery);
 	battery->force_x = 0;
-  
-	battery->panel = panel;  
+
+	battery->panel = panel;
 	panel->battery = battery;
-  
+
   toytimer_init(&battery->timer, CLOCK_MONOTONIC,
 		      window_get_display(panel->window), clock_func);
-	
-    
+
+
   struct itimerspec its;
   //In seconds - needs to be zero for nsec to work
 	its.it_interval.tv_sec = 30;
@@ -2572,9 +2685,9 @@ panel_add_battery(struct panel *panel)
 	its.it_interval.tv_nsec = 0;
 	its.it_value.tv_sec = 0;
 	its.it_value.tv_nsec = 1;
-  
+
   toytimer_arm(&battery->timer, &its);
-  
+
 
 	battery->widget = widget_add_widget(panel->widget, battery);
 	widget_set_redraw_handler(battery->widget, panel_battery_redraw_handler);
@@ -2583,74 +2696,74 @@ panel_add_battery(struct panel *panel)
 
 
 static void toggle_inhibit(struct panel_launcher *launcher) {
-  
+
   shell_helper_toggle_inhibit (global_desktop->helper, global_desktop->shell, global_desktop->seat);
   global_power_inhibit = !global_power_inhibit;
   launcher->toggled = !launcher->toggled;
-  
+
   widget_schedule_redraw(launcher->widget);
 }
 
 static void launch_exposay(struct panel_launcher *launcher) {
-  shell_helper_launch_exposay (global_desktop->helper, global_desktop->shell, global_desktop->seat);  
+  shell_helper_launch_exposay (global_desktop->helper, global_desktop->shell, global_desktop->seat);
 }
 //TODO
 //Add support for cases when clock is disabled in the weston settings
 
 static void launch_system(struct panel_launcher *launcher) {
-  
+
   struct rectangle allocation;
   struct rectangle widget_allocation;
 	cairo_t *cr;
-  
-  
+
+
   if(launcher->panel->clock_state == VOLUME_SHOWN) {
     launch_volume(launcher);
 	}
-  
+
 	widget_get_allocation(launcher->panel->reboot_launcher->widget, &widget_allocation);
-  
+
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
-    launcher->panel->clock->force_x = WAYWARD_HIDE_X;    
+    launcher->panel->clock->force_x = WAYWARD_HIDE_X;
     launcher->panel->reboot_launcher->force_x = launcher->panel->clock_allocation.x;
     launcher->panel->shutdown_launcher->force_x = launcher->panel->clock_allocation.x + 48;
     launcher->panel->reboot_launcher->initial_x = launcher->panel->clock_allocation.x;
     launcher->panel->shutdown_launcher->initial_x = launcher->panel->clock_allocation.x + 48;
     launcher->panel->clock_state = SYSTEM_SHOWN;
-    
+
 	} else {
     launcher->panel->clock->force_x = 0;
     launcher->panel->reboot_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->shutdown_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->clock_state = CLOCK_SHOWN;
-    
+
   }
-  
-  
-  
-  widget_set_allocation(launcher->panel->clock->widget, 
-    launcher->panel->clock->force_x, 
+
+
+
+  widget_set_allocation(launcher->panel->clock->widget,
+    launcher->panel->clock->force_x,
     launcher->panel->clock_allocation.y,
-		launcher->panel->clock_allocation.width, 
+		launcher->panel->clock_allocation.width,
     launcher->panel->clock_allocation.height
   );
-  
-  
-  widget_set_allocation(launcher->panel->reboot_launcher->widget, 
-    launcher->panel->reboot_launcher->force_x, 
+
+
+  widget_set_allocation(launcher->panel->reboot_launcher->widget,
+    launcher->panel->reboot_launcher->force_x,
     widget_allocation.y,
-		widget_allocation.width, 
+		widget_allocation.width,
     widget_allocation.height
   );
-  
-  widget_set_allocation(launcher->panel->shutdown_launcher->widget, 
-    launcher->panel->shutdown_launcher->force_x, 
+
+  widget_set_allocation(launcher->panel->shutdown_launcher->widget,
+    launcher->panel->shutdown_launcher->force_x,
     widget_allocation.y,
-		widget_allocation.width, 
+		widget_allocation.width,
     widget_allocation.height
   );
-  
-  
+
+
   widget_schedule_redraw(launcher->panel->reboot_launcher->widget);
   widget_schedule_redraw(launcher->panel->shutdown_launcher->widget);
   widget_schedule_redraw(launcher->panel->clock->widget);
@@ -2659,10 +2772,10 @@ static void launch_system(struct panel_launcher *launcher) {
 
 
 static void panel_volume_label_redraw_handler(struct widget *widget, void *data) {
-  
-  
-  
-	
+
+
+
+
 	cairo_t *cr;
 	struct rectangle allocation;
 	cairo_text_extents_t extents;
@@ -2671,32 +2784,32 @@ static void panel_volume_label_redraw_handler(struct widget *widget, void *data)
 
   if(label->panel->clock_state != VOLUME_SHOWN)
     return;
-	
+
 	sprintf(string, "%d", (int)global_desktop->current_volume_percentage);
 
   label->panel->painted = 0;
 	cr = widget_cairo_create(label->panel->widget);
 	cairo_set_font_size(cr, 20);
-  
+
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
 				CAIRO_FONT_WEIGHT_NORMAL);
-  
+
 	cairo_text_extents(cr, string, &extents);
-	
+
   allocation.x = label->panel->clock_allocation.x;
   allocation.y = 31;
-  
+
   if(label->force_x)
     allocation.x = label->force_x;
-  
+
 	printf("Volume label drawn annotation x y %d \n", allocation.x, allocation.y);
-	
+
 	cairo_move_to(cr, allocation.x, 31);
 	cairo_set_source_rgba(cr, 1, 1, 1, 1);
 	cairo_show_text(cr, string);
 	cairo_destroy(cr);
-  
+
 }
 
 static struct panel_label *panel_add_volume_label(struct panel *panel)
@@ -2705,116 +2818,116 @@ static struct panel_label *panel_add_volume_label(struct panel *panel)
 
 	label = xzalloc(sizeof *label);
 	label->force_x = 0;
-  
+
 	label->panel = panel;
 	panel->volume_label = label;
 
 
 	label->widget = widget_add_widget(panel->widget, label);
 	widget_set_redraw_handler(label->widget, panel_volume_label_redraw_handler);
-  
+
   return label;
 }
 
 static void launch_volume(struct panel_launcher *launcher) {
-  
+
   struct rectangle allocation;
   struct rectangle widget_allocation;
 	cairo_t *cr;
   int label_padding = 45;
-  
+
 	widget_get_allocation(launcher->panel->reboot_launcher->widget, &widget_allocation);
-  
+
   if(launcher->panel->clock_state == SYSTEM_SHOWN) {
     launch_system(launcher);
 	}
-  
+
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
     if(global_desktop->current_volume_percentage == 100) {
       label_padding = 41;
     }
     printf("Volume Clock shown \n");
-    launcher->panel->clock->force_x = WAYWARD_HIDE_X;    
+    launcher->panel->clock->force_x = WAYWARD_HIDE_X;
     launcher->panel->volumedown_launcher->force_x = launcher->panel->clock_allocation.x;
     launcher->panel->volumeup_launcher->force_x = launcher->panel->clock_allocation.x + 84;
     launcher->panel->volumedown_launcher->initial_x = launcher->panel->clock_allocation.x;
     launcher->panel->volumeup_launcher->initial_x = launcher->panel->clock_allocation.x + 84;
     //volume label
     launcher->panel->volume_label->force_x = launcher->panel->clock_allocation.x + label_padding;
-    
+
     launcher->panel->clock_state = VOLUME_SHOWN;
-    
+
 	} else {
     launcher->panel->clock->force_x = 0;
     launcher->panel->volumedown_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->volumeup_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->volume_label->force_x = WAYWARD_HIDE_X;
-    launcher->panel->clock_state = CLOCK_SHOWN;    
+    launcher->panel->clock_state = CLOCK_SHOWN;
   }
-  
-  widget_set_allocation(launcher->panel->clock->widget, 
-    launcher->panel->clock->force_x, 
+
+  widget_set_allocation(launcher->panel->clock->widget,
+    launcher->panel->clock->force_x,
     launcher->panel->clock_allocation.y,
-		launcher->panel->clock_allocation.width, 
+		launcher->panel->clock_allocation.width,
     launcher->panel->clock_allocation.height
   );
-  
-  
-  widget_set_allocation(launcher->panel->volumedown_launcher->widget, 
-    launcher->panel->volumedown_launcher->force_x, 
+
+
+  widget_set_allocation(launcher->panel->volumedown_launcher->widget,
+    launcher->panel->volumedown_launcher->force_x,
     widget_allocation.y,
-		widget_allocation.width, 
+		widget_allocation.width,
     widget_allocation.height
   );
-  
-  widget_set_allocation(launcher->panel->volumeup_launcher->widget, 
-    launcher->panel->volumeup_launcher->force_x, 
+
+  widget_set_allocation(launcher->panel->volumeup_launcher->widget,
+    launcher->panel->volumeup_launcher->force_x,
     widget_allocation.y,
-		widget_allocation.width, 
+		widget_allocation.width,
     widget_allocation.height
   );
-  
-  widget_set_allocation(launcher->panel->volume_label->widget, 
-    launcher->panel->volume_label->force_x, 
+
+  widget_set_allocation(launcher->panel->volume_label->widget,
+    launcher->panel->volume_label->force_x,
     widget_allocation.y,
-		40, 
+		40,
     50
   );
-  
-  
+
+
   widget_schedule_redraw(launcher->panel->volumedown_launcher->widget);
   widget_schedule_redraw(launcher->panel->volumeup_launcher->widget);
   widget_schedule_redraw(launcher->panel->volume_label->widget);
-  
+
   widget_schedule_redraw(launcher->panel->clock->widget);
   window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
 }
 
 
 void launch_browser() {
-  
+
   extern char **environ;
-  
+
   pid_t pid;
   char *argv[] = {"/usr/bin/xdg-open", "https://start.duckduckgo.com?kae=d", NULL};
-  
+
   int status = posix_spawn(&pid, "/usr/bin/xdg-open", NULL, NULL, argv, environ);
   return;
 
-  
+
 }
 
 void launch_terminal() {
-  
+
   extern char **environ;
-  
+
   pid_t pid;
   char *argv[] = {"/usr/bin/wayward-terminal", NULL};
-  
+
   int status = posix_spawn(&pid, "/usr/bin/wayward-terminal", NULL, NULL, argv, environ);
   return;
 
-  
+
 }
 
 void clock_volume_mute () {
@@ -2823,46 +2936,46 @@ void clock_volume_mute () {
 }
 
 void clock_volume_up () {
-  
+
   printf("Volume pre-up is %d \n", global_desktop->current_volume);
-  
+
   volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume + WAYWARD_AUDIO_STEP)));
-  //volume_set( ((double)(global_desktop->current_volume + 5)));
+
   if (global_desktop->mixer != NULL)
   {
     snd_mixer_handle_events (global_desktop->mixer_handle);
     snd_mixer_selem_get_playback_volume(global_desktop->mixer,
     0, &global_desktop->current_volume);
-    
+
     global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
-    
+
     printf("Volume post-up is %d \n", global_desktop->current_volume);
   }
 }
 
 void clock_volume_down () {
-  
-  
-  
+
+
+
   printf("Volume pre-down is %d \n", global_desktop->current_volume);
-  
-  
-  volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume - WAYWARD_AUDIO_STEP)) );  
-  
+
+
+  volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume - WAYWARD_AUDIO_STEP)) );
+
   if (global_desktop->mixer != NULL)
   {
     snd_mixer_handle_events (global_desktop->mixer_handle);
     snd_mixer_selem_get_playback_volume (global_desktop->mixer,
     0, &global_desktop->current_volume);
-    
+
     global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
     printf("Volume post-down is %d \n", global_desktop->current_volume);
   }
-  
+
   if(global_desktop->current_volume_percentage < 7 )
-    volume_set(0);    
-  
-  
+    volume_set(0);
+
+
 
 }
 
@@ -2875,7 +2988,7 @@ static void clock_shutdown ()
 static void
 clock_restart ()
 {
-  printf("Restart  \n"); 
+  printf("Restart  \n");
   execl ("/usr/bin/sudo", "/usr/bin/sudo", "/usr/bin/systemctl", "reboot", (char *)0);
 }
 
@@ -2883,33 +2996,33 @@ clock_restart ()
 
 static void check_shm_commands(struct toytimer *tt) {
   const char *name = "/wayward-shared_mem";
-  
+
   //printf("SHM timer \n");
-  
+
   static int shm_init = 0;
   static void *ptr = NULL;
   static int shm_fd = 0;
   if(!shm_init) {
     shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
-    ftruncate(shm_fd, sizeof(int) ); 
+    ftruncate(shm_fd, sizeof(int) );
     ptr = mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, shm_fd, 0);\
     shm_init = 1;
-    
+
     if(ptr < 0)
     {
       printf("SHM Mapping failed. Keyboard shortcuts disabled \n");
       return;
     }
   }
-  
-  
+
+
   int test = 0;
   int null = 0;
   memcpy(&test, (int *)ptr, sizeof(int));
   if(test != SHM_START) {
     memcpy((int*)ptr, &null, sizeof(int));
   } else {
-    return;  
+    return;
   }
   //printf("SHM Command is %d \n", test);
   if(test == SHM_MUTE) {
@@ -2927,7 +3040,7 @@ static void check_shm_commands(struct toytimer *tt) {
   } else if(test == SHM_LAUNCH_BROWSER) {
     launch_browser();
   }
-  
+
 }
 
 
@@ -2935,66 +3048,66 @@ static void check_shm_commands(struct toytimer *tt) {
 //TODO add svg
 static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 {
-  
-  char *icon = NULL; 
+
+  char *icon = NULL;
   char *path = NULL;
   char *line = NULL;
   char *hide_apps;
   size_t len = 0;
   ssize_t read;
-  
+
   struct weston_config_section *s;
   s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
   weston_config_section_get_string(s, "hide-apps", &hide_apps, "");
-  
+
   printf("Hide apps %s \n", hide_apps);
-  
-  
+
+
   if(global_menu_done) {
-    return;  
-  }
-  
-  //Run script to get cached entries
-  //TODO use C instead
-  if(system ("/usr/bin/bash /usr/lib/weston/wayward-lsdesktopf" )) {  
-    printf("error occured %s", strerror(errno)); 
-    
-    return;      
-  }
-  
-  
-  char path_buf[1256];
-  int skip_next = 0;
-  
-  snprintf(path_buf, sizeof path_buf, "%s/.cache/wayward-menus", getenv("HOME"));
-  
-  
-  
-  printf("Adding applications \n");
-  
-  
-  FILE* file = fopen(path_buf, "r");
-  if(!file) {
-    return;  
+    return;
   }
 
-  
+  //Run script to get cached entries
+  //TODO use C instead
+  if(system ("/usr/bin/bash /usr/lib/weston/wayward-lsdesktopf" )) {
+    printf("error occured %s", strerror(errno));
+
+    return;
+  }
+
+
+  char path_buf[1256];
+  int skip_next = 0;
+
+  snprintf(path_buf, sizeof path_buf, "%s/.cache/wayward-menus", getenv("HOME"));
+
+
+
+  printf("Adding applications \n");
+
+
+  FILE* file = fopen(path_buf, "r");
+  if(!file) {
+    return;
+  }
+
+
   while ((read = getline(&line, &len, file)) != -1) {
-    
-    
-    
+
+
+
     if(line) {
-      
+
       if(skip_next){
         skip_next = 0;
-        continue;        
+        continue;
       }
-      
+
       line[strcspn(line, "\n")] = 0;
-      
-      
+
+
       if(!path) {
-        
+
         if(strstr(hide_apps, trimwhitespace(line) ) != NULL) {
           skip_next = 1;
           continue;
@@ -3005,40 +3118,40 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
         }
         path = (char *) malloc(len);
         strncpy(path, line, len);
-        
-      } else if(path && !icon) {        
+
+      } else if(path && !icon) {
         icon = (char *) malloc(len);
         strncpy(icon, line, len);
-        
+
       }
-      
+
       if(path && icon) {
-        printf("path and icon %s %s %s \n", path, icon, basename(path) );   
-        
-        
+        printf("path and icon %s %s %s \n", path, icon, basename(path) );
+
+
         panel_add_launcher(panel, icon, path, 0, NULL);
-        
+
         free(icon);
         free(path);
         icon = NULL;
         path = NULL;
-        
+
       }
-      
-        
+
+
     }
-    
-    
-    
+
+
+
   }
-        
-        
+
+
   free(hide_apps);
   free(line);
   line = NULL;
   hide_apps = NULL;
   fclose(file);
-  
+
   printf("File closed \n");
 }
 
@@ -3052,11 +3165,11 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 	int count;
   struct rectangle clock_allocation;
   struct rectangle launcher_allocation;
-  
-  
-  
-  
-  
+
+
+
+
+
 
 	count = 0;
   s = NULL;
@@ -3077,11 +3190,11 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 		free(icon);
 		free(path);
 	}
-  
+
   //Add launchers from /usr/share/applications
   wayward_add_launchers(panel, desktop);
 
-  
+
 	if (count == 0) {
 		/* add default launcher */
 		panel_add_launcher(panel,
@@ -3090,12 +3203,12 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
            0,
            NULL
     );
-		
+
 	}
-  
+
   widget_get_allocation(panel->clock->widget, &clock_allocation);
   printf("Clock allocation is %d %d \n", clock_allocation.x, clock_allocation.y);
-  
+
   //Action launchers
   panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/devices/tv-symbolic.svg",
@@ -3103,38 +3216,38 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
     0,
     toggle_inhibit
   );
-  
+
   panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/actions/open-menu-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_exposay
   );
-  
+
   panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/emblems/emblem-system-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_system
   );
-  
-  panel_add_launcher(panel, 
+
+  panel_add_launcher(panel,
    "/usr/share/icons/Adwaita/scalable/apps/multimedia-volume-control-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_volume
   );
-  
+
   //Add Restart button for system section
-  
+
   panel->reboot_launcher = panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/actions/system-reboot-symbolic.svg",
     BINDIR "/weston-terminal",
     WAYWARD_HIDE_X,
     clock_restart
   );
-  
-  
+
+
   //Add Shutdown button
   panel->shutdown_launcher = panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/actions/system-shutdown-symbolic.svg",
@@ -3142,16 +3255,16 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
     WAYWARD_HIDE_X,
     clock_shutdown
   );
-  
-  
+
+
   panel->reboot_launcher->force_x = WAYWARD_HIDE_X;
   panel->shutdown_launcher->force_x = WAYWARD_HIDE_X;
   widget_schedule_redraw(panel->reboot_launcher->widget);
   widget_schedule_redraw(panel->shutdown_launcher->widget);
-  
+
   if(global_desktop->mixer_handle == NULL)
     return;
-  
+
   //Add plus/minus button
   panel->volumedown_launcher = panel_add_launcher(panel,
 		"/usr/share/icons/Adwaita/scalable/actions/list-remove-symbolic.svg",
@@ -3165,22 +3278,22 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
     0,
     clock_volume_up
   );
-  
+
   snd_mixer_handle_events (global_desktop->mixer_handle);
   snd_mixer_selem_get_playback_volume(global_desktop->mixer,
   0, &global_desktop->current_volume);
   global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
   printf("Volume is %d \n", desktop->current_volume);
   panel->volume_label = panel_add_volume_label(panel);
-  
+
   panel->volumedown_launcher->force_x = WAYWARD_HIDE_X;
   panel->volumeup_launcher->force_x = WAYWARD_HIDE_X;
   panel->volume_label->force_x = WAYWARD_HIDE_X;
   widget_schedule_redraw(panel->volumedown_launcher->widget);
   widget_schedule_redraw(panel->volumeup_launcher->widget);
-  
-  
-		
+
+
+
 }
 
 static void
@@ -3253,7 +3366,7 @@ int main(int argc, char *argv[])
 		weston_config_destroy(desktop.config);
 		return -1;
 	}
-  
+
   global_desktop = &desktop;
 
 	display_set_user_data(desktop.display, &desktop);
@@ -3262,31 +3375,31 @@ int main(int argc, char *argv[])
 
 	/* Create panel and background for outputs processed before the shell
 	 * global interface was processed */
-	if (desktop.want_panel) 
+	if (desktop.want_panel)
 		weston_desktop_shell_set_panel_position(desktop.shell, desktop.panel_position);
-  
+
   setup_mixer(&desktop);
-  
+
   //check if battery exists
   check_battery_exists();
-  
+
   wl_list_for_each(output, &desktop.outputs, link)
 		if (!output->panel)
 			output_init(output, &desktop);
 
-  
+
   //Setup shm timer
   toytimer_init(&desktop.shm_timer, CLOCK_MONOTONIC,
 		      desktop.display, check_shm_commands);
-    
+
   struct itimerspec its;
 	struct timespec ts;
 	struct tm *tm;
 
 	clock_gettime(CLOCK_REALTIME, &ts);
-    
+
   printf("Seconds %d \n",  ts.tv_sec);
-    
+
 	its.it_interval.tv_sec = 0;
   //ms * 1000000
   //runs every 500ms
@@ -3297,11 +3410,11 @@ int main(int argc, char *argv[])
 
 	toytimer_arm(&desktop.shm_timer, &its);
   //end Setup shm timer
-  
-    
+
+
 	grab_surface_create(&desktop);
-    
-  
+
+
 
 	signal(SIGCHLD, sigchild_handler);
 

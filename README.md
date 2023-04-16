@@ -2,7 +2,7 @@
 
 ## Features
 
-* Lightweight, only 20-37MB memory usage for one FHD monitor
+* Lightweight, only 10-15MB memory usage for one FHD monitor
 * Bottom app launch panel with autohide, time, date, volume control, battery indicator, and restart/shutdown buttons.
 * Button to prevent monitor standby when playing videos
 * No X11 dependencies, Xwayland is not required
@@ -47,7 +47,7 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
 * weston and wayland
 * ttf-droid and adwaita-icon-theme
-* librsvg and cairo
+* cairo
 * sudo
 
 ----
@@ -75,6 +75,8 @@ Edit weston.ini and add hide-apps to the shell section. For example
 Wallpapers are changed from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-background-image
 
 ## Changelog
+
+1.2.0 - Remove librsvg dependency. Reduces memory usage by 10MB. May cause issues with some icons.
 
 1.1.0 - Update to Weston 11.0. Remove workspaces as Weston 11 removed them.
 

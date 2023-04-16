@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 varmd - https://github.com/varmd
+ * Copyright © 2021-2023 varmd - https://github.com/varmd
  * Copyright © 2008 Kristian Høgsberg
  * Copyright © 2012-2013 Collabora, Ltd.
  *
@@ -1343,14 +1343,14 @@ create_cursors(struct display *display)
 			size = DEFAULT_XCURSOR_SIZE;
 	}
 
-  
+
 	config_file = weston_config_get_name_from_env();
 	config = weston_config_parse(config_file);
 	s = weston_config_get_section(config, "shell", NULL, NULL);
 	weston_config_section_get_string(s, "cursor-theme", &theme, theme);
 	weston_config_section_get_int(s, "cursor-size", &size, size);
 	weston_config_destroy(config);
-  
+
 	display->cursor_theme = wl_cursor_theme_load(theme, size, display->shm);
 	if (!display->cursor_theme) {
 		fprintf(stderr, "could not load theme '%s'\n", theme);
@@ -1631,8 +1631,8 @@ widget_find_widget(struct widget *widget, int32_t x, int32_t y)
 	alloc_y = widget->allocation.y;
 	width = widget->allocation.width;
 	height = widget->allocation.height;
-  
-  
+
+
 
 	if (widget->viewport_dest_width != -1 &&
 	    widget->viewport_dest_height != -1) {
@@ -1644,12 +1644,12 @@ widget_find_widget(struct widget *widget, int32_t x, int32_t y)
 		alloc_y = alloc_y * scale;
 		height = widget->viewport_dest_height;
 	}
-  
+
 
 
 	if (alloc_x <= x && x < alloc_x + width &&
 	    alloc_y <= y && y < alloc_y + height) {
-    //printf("Alloc x y %d %d | %d %d | %d %d | %d %d \n", x, y, alloc_x, alloc_y, widget->allocation.x, widget->allocation.y, widget->allocation.width, widget->allocation.height);    
+    //printf("Alloc x y %d %d | %d %d | %d %d | %d %d \n", x, y, alloc_x, alloc_y, widget->allocation.x, widget->allocation.y, widget->allocation.width, widget->allocation.height);
 		return widget;
 	}
 
@@ -5430,6 +5430,7 @@ menu_redraw_handler(struct widget *widget, void *data)
 		} else {
 			cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
 			cairo_move_to(cr, x + 10, y + i * 20 + 16);
+			cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
 			cairo_show_text(cr, menu->entries[i]);
 		}
 	}

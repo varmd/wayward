@@ -144,10 +144,10 @@ void
 render_shadow(cairo_t *cr, cairo_surface_t *surface,
 	      int x, int y, int width, int height, int margin, int top_margin)
 {
-  
+
   return;
-  
-	
+
+
 }
 
 void
@@ -342,6 +342,7 @@ theme_destroy(struct theme *t)
 	cairo_surface_destroy(t->shadow);
 	free(t);
 }
+/*
 
 #ifdef HAVE_PANGO
 static PangoLayout *
@@ -366,6 +367,7 @@ create_layout(cairo_t *cr, const char *title)
 	return layout;
 }
 #endif
+*/
 
 /*
 #ifdef HAVE_PANGO
@@ -373,12 +375,12 @@ create_layout(cairo_t *cr, const char *title)
 	pango_cairo_show_layout(cr, title_layout)
 #else
 #define SHOW_TEXT(cr) \
-	
+
 #endif
 */
 
 #define SHOW_TEXT(cr) \
-  cairo_show_text(cr, title)	
+  cairo_show_text(cr, title)
 
 
 
@@ -466,9 +468,9 @@ theme_render_frame(struct theme *t,
 			cairo_move_to(cr, x + 1, y  + 1);
 			cairo_set_source_rgb(cr, 1, 1, 1);
 			SHOW_TEXT(cr);
-      
-      //Shadow 
-      
+
+      //Shadow
+
 			///cairo_move_to(cr, x, y);
 			//cairo_set_source_rgb(cr, 0, 0, 0);
 			//SHOW_TEXT(cr);

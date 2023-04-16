@@ -20,15 +20,15 @@ GTK_CFLAGS="-std=c11 -pthread \
 -I/usr/include \
 -I/usr/include/cairo \
 -I/usr/include/pixman-1 \
--I/usr/include/librsvg-2.0/ \
--I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include \
+-I/usr/include/glib-2.0 \
+-I/usr/lib/glib-2.0/include \
 -I/usr/include/gdk-pixbuf-2.0 \
 -I/usr/include/libjpeg \
 -I/usr/include/
 -Igen-protocol
 "
 
-GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound  -lrsvg-2 -ljpeg -lm -lrt "
+GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound -ljpeg -lm -lrt "
 
 
 cd `dirname $0`

@@ -2,7 +2,7 @@
 
 ## Features
 
-* Lightweight, only 10-15MB memory usage for one FHD monitor
+* Lightweight, only 12-15MB memory usage for one FHD monitor
 * Bottom app launch panel with autohide, time, date, volume control, battery indicator, and restart/shutdown buttons.
 * Button to prevent monitor standby when playing videos
 * No X11 dependencies, Xwayland is not required
@@ -76,7 +76,7 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 
 ## Changelog
 
-1.2.0 - Remove librsvg dependency. Reduces memory usage by 10MB. May cause issues with some icons.
+1.2.0 - Remove librsvg dependency. Reduces memory usage by upto 10MB. May cause issues with some icons.
 
 1.1.0 - Update to Weston 11.0. Remove workspaces as Weston 11 removed them.
 

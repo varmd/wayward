@@ -1258,8 +1258,8 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
     snprintf(path_buf, sizeof path_buf, "%s/pngs/%d-svg.png", getenv("HOME"), count);
     count++;
 
-  	printf("rasterizing image %f x %f -> to 32 32 %f \n",
-  	  image->width, image->height, scale);
+//  	printf("rasterizing image %f x %f -> to 32 32 %f \n",
+//  	  image->width, image->height, scale);
   	nsvgRasterize(rast, image, 0, 0, scale, img_pixels, w, h, w*4);
 
     //Alphas need to be pre-multiplied
@@ -3044,6 +3044,7 @@ static void check_shm_commands(struct toytimer *tt) {
 }
 
 
+
 //TODO add launchers with icons
 //TODO add svg
 static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
@@ -3052,7 +3053,9 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
   char *icon = NULL;
   char *path = NULL;
   char *line = NULL;
-  char *hide_apps;
+  char *hide_apps = NULL;
+  char *hide_apps_token, *hide_apps_str, *hide_apps_tofree;
+
   size_t len = 0;
   ssize_t read;
 
@@ -3108,6 +3111,7 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 
       if(!path) {
 
+/*
         if(strstr(hide_apps, trimwhitespace(line) ) != NULL) {
           skip_next = 1;
           continue;
@@ -3116,6 +3120,25 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
           skip_next = 1;
           continue;
         }
+*/
+
+        //hide_apps_token, *hide_apps_str, *hide_apps_tofree;
+        if(hide_apps) {
+          hide_apps_tofree = hide_apps_str = strdup(hide_apps);  // We own str's memory now.
+          while ((hide_apps_token = strsep(&hide_apps_str, ","))) {
+
+            if(strstr(line, trimwhitespace(hide_apps_token) ) != NULL) {
+              printf("Hide app %s line %s \n", hide_apps_token, line);
+              skip_next = 1;
+              break;
+            }
+          };
+          free(hide_apps_tofree);
+          if(skip_next)
+            continue;
+
+        }
+
         path = (char *) malloc(len);
         strncpy(path, line, len);
 
@@ -3126,9 +3149,7 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
       }
 
       if(path && icon) {
-        printf("path and icon %s %s %s \n", path, icon, basename(path) );
-
-
+        //printf("path and icon %s %s %s \n", path, icon, basename(path) );
         panel_add_launcher(panel, icon, path, 0, NULL);
 
         free(icon);

@@ -28,7 +28,8 @@ GTK_CFLAGS="-std=c11 -pthread \
 -Igen-protocol
 "
 
-GTK_LIBS=" -lwayland-client -lpng -lutil -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound -ljpeg -lm -lrt "
+GTK_LIBS=" -lwayland-client -lpng -lutil \
+   -lwayland-cursor -lpixman-1  -lcairo  -lxkbcommon -lasound -ljpeg -lm -lrt "
 
 
 cd `dirname $0`
@@ -75,11 +76,9 @@ cd `dirname $0`
 
 gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o wayward-terminal
 
-gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm -lEGL -lGLESv2   -o wayward
-
-
+gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm -o wayward
 
 gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
 
-#make
+
 echo OK!

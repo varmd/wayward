@@ -20,6 +20,8 @@ rm -rf wayward
 rm -rf shell_helper.so
 rm -rf wayward-terminal
 
+mkdir -p $1/usr/share/wayward
+cp icons/* $1/usr/share/wayward/
 
 #make
 echo OOOK!

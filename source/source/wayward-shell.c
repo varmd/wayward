@@ -1216,10 +1216,9 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
   	unsigned char* img_pixels = NULL;
   	unsigned char* rgba_img_pixels = NULL;
   	int w, h;
-    char path_buf[1256];
+ //   char path_buf[1256];
     int skip_next = 0;
     static int count = 0;
-
 
   	image = nsvgParseFromFile(filename, "px", 96.0f);
   	if (image == NULL) {
@@ -1251,12 +1250,8 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
   	//scaleX = width_of_canvas / (float)image->width; scaleY = height_of_canvas / (float)image->height;
   	//nsvgRasterizeXY(rast, image, 0, 0, scaleX, scaleY, img_data.data(), w, h, w * 4);
 
-
-
-
-
-    snprintf(path_buf, sizeof path_buf, "%s/pngs/%d-svg.png", getenv("HOME"), count);
-    count++;
+    //snprintf(path_buf, sizeof path_buf, "%s/pngs/%d-svg.png", getenv("HOME"), count);
+    //count++;
 
 //  	printf("rasterizing image %f x %f -> to 32 32 %f \n",
 //  	  image->width, image->height, scale);
@@ -1297,7 +1292,6 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
                                                CAIRO_FORMAT_ARGB32,
                                                w, h, w*4 );
     free(img_pixels);
-    //free(rgba_img_pixels);
     return surface;
 
 
@@ -1367,16 +1361,19 @@ cairo_destroy ( cr );
 static cairo_surface_t *
 load_icon_svg_or_fallback(const char *icon)
 {
-	cairo_surface_t *surface = cairo_image_surface_create_from_svg(icon, WAYWARD_ICON_SIZE);
-
 	cairo_status_t status;
 	cairo_t *cr;
+	cairo_surface_t *surface = cairo_image_surface_create_from_svg(icon, WAYWARD_ICON_SIZE);
 
-	status = cairo_surface_status(surface);
-	if (status == CAIRO_STATUS_SUCCESS)
-		return surface;
+  if(surface) {
+  	status = cairo_surface_status(surface);
+	  if (status == CAIRO_STATUS_SUCCESS)
+		  return surface;
+		else
+    	cairo_surface_destroy(surface);
+	}
 
-	cairo_surface_destroy(surface);
+
 	fprintf(stderr, "ERROR loading icon from file '%s', error: '%s'\n",
 		icon, cairo_status_to_string(status));
 
@@ -3232,28 +3229,28 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 
   //Action launchers
   panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/devices/tv-symbolic.svg",
+		"/usr/share/wayward/tv-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     toggle_inhibit
   );
 
   panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/actions/open-menu-symbolic.svg",
+		"/usr/share/wayward/open-menu-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_exposay
   );
 
   panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/emblems/emblem-system-symbolic.svg",
+		"/usr/share/wayward/emblem-system-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_system
   );
 
   panel_add_launcher(panel,
-   "/usr/share/icons/Adwaita/scalable/apps/multimedia-volume-control-symbolic.svg",
+   "/usr/share/wayward/multimedia-volume-control-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     launch_volume
@@ -3262,7 +3259,7 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   //Add Restart button for system section
 
   panel->reboot_launcher = panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/actions/system-reboot-symbolic.svg",
+		"/usr/share/wayward/system-reboot-symbolic.svg",
     BINDIR "/weston-terminal",
     WAYWARD_HIDE_X,
     clock_restart
@@ -3271,7 +3268,7 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 
   //Add Shutdown button
   panel->shutdown_launcher = panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/actions/system-shutdown-symbolic.svg",
+		"/usr/share/wayward/system-shutdown-symbolic.svg",
     BINDIR "/weston-terminal",
     WAYWARD_HIDE_X,
     clock_shutdown
@@ -3288,13 +3285,13 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 
   //Add plus/minus button
   panel->volumedown_launcher = panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/actions/list-remove-symbolic.svg",
+		"/usr/share/wayward/list-remove-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     clock_volume_down
   );
   panel->volumeup_launcher = panel_add_launcher(panel,
-		"/usr/share/icons/Adwaita/scalable/actions/list-add-symbolic.svg",
+		"/usr/share/wayward/list-add-symbolic.svg",
     BINDIR "/weston-terminal",
     0,
     clock_volume_up

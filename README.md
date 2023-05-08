@@ -46,7 +46,7 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 **Requirements**
 
 * weston and wayland
-* ttf-droid and adwaita-icon-theme
+* ttf-droid
 * cairo
 * sudo
 
@@ -76,6 +76,8 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 
 ## Changelog
 
+1.2.2 - Remove adwaita-icon-theme dependency due to upstream path changes.
+
 1.2.0 - Remove librsvg dependency. Reduces memory usage by upto 10MB. May cause issues with some icons.
 
 1.1.0 - Update to Weston 11.0. Remove workspaces as Weston 11 removed them.
@@ -99,5 +101,5 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 * Need to restart weston after a new app installation to see the new app icon in the panel.
 
 
-
+Icons are taken from Adwaita icon theme - https://github.com/GNOME/adwaita-icon-theme
 

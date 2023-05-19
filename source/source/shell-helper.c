@@ -18,6 +18,7 @@
  * Boston, MA  02110-1301  USA
  *
  * Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+ *         Tobias Frisch <thejackimonster@gmail.com>
  */
 
 #include <stdio.h>
@@ -31,8 +32,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <libweston/desktop.h>
 #include <libweston/libweston.h>
-#include <libweston-desktop/libweston-desktop.h>
 #include <linux/input.h>
 
 #include <gbm.h>
@@ -374,13 +375,13 @@ shell_helper_move_surface(struct wl_client *client,
 		return;
 
   if(x == -13371)
-    x = view->geometry.x;
+    x = view->geometry.pos_offset.x;
 	weston_view_set_position(view, x, y);
 	weston_view_update_transform(view);
 }
 
 static void
-configure_surface(struct weston_surface *es, int32_t sx, int32_t sy)
+configure_surface(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
 	struct weston_view *existing_view = es->committed_private;
 	struct weston_view *new_view;
@@ -456,7 +457,7 @@ shell_helper_add_surface_to_layer(struct wl_client *client,
 //TODO
 //Is this needed?
 static void
-configure_panel(struct weston_surface *es, int32_t sx, int32_t sy)
+configure_panel(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
 	struct shell_helper *helper = es->committed_private;
 	struct weston_view *view;
@@ -487,7 +488,10 @@ shell_helper_set_panel(struct wl_client *client,
 	 * it hasn't yet been defined because the original surface configure
 	 * function hasn't yet been called. if we call it here we will have
 	 * access to the layer. */
-	surface->committed(surface, 0, 0);
+	struct weston_coord_global wcg;
+	wcg.c.x = 0.0;
+	wcg.c.y = 0.0;
+	surface->committed(surface, weston_coord_global_to_surface(view, wcg));
 
 	helper->panel_layer = container_of(view->layer_link.link.next,
 					   struct weston_layer,
@@ -1551,7 +1555,7 @@ exposay_scale(struct exposay_surface *esurface)
 	//weston_matrix_scale(&esurface->transform.matrix, esurface->scale, esurface->scale, 1.0f);
 	weston_matrix_scale(&esurface->transform.matrix, esurface->scale, esurface->scale, 1.0f);
 	//weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.x, esurface->y - esurface->view->geometry.y, 0);
-	weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.x, esurface->y - esurface->view->geometry.y, 0);
+	weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.pos_offset.x, esurface->y - esurface->view->geometry.pos_offset.y, 0);
 
 
 	weston_view_geometry_dirty(esurface->view);
@@ -1998,8 +2002,8 @@ exposay_motion(struct weston_pointer_grab *grab,
 	weston_pointer_move(grab->pointer, event);
 
   exposay_pick(shell,
-	             wl_fixed_to_int(grab->pointer->x),
-	             wl_fixed_to_int(grab->pointer->y));
+	             wl_fixed_to_int(grab->pointer->sx),
+	             wl_fixed_to_int(grab->pointer->sy));
 }
 
 static void

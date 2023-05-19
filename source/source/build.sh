@@ -1,6 +1,6 @@
 #!/bin/bash
 
-WESTON_VER=11
+WESTON_VER=12
 
 cd `dirname $0`
 

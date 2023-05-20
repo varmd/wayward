@@ -32,7 +32,7 @@
 #include <fcntl.h>
 
 #include <libweston/libweston.h>
-#include <libweston-desktop/libweston-desktop.h>
+#include <libweston/desktop.h>
 #include <linux/input.h>
 
 #include <gbm.h>
@@ -99,8 +99,6 @@ struct exposay_surface {
 
   struct weston_surface *mask_surface;
   struct weston_view *mask_view;
-
-
 
 	int x;
 	int y;
@@ -374,13 +372,13 @@ shell_helper_move_surface(struct wl_client *client,
 		return;
 
   if(x == -13371)
-    x = view->geometry.x;
+    x = view->geometry.pos_offset.x;
 	weston_view_set_position(view, x, y);
 	weston_view_update_transform(view);
 }
 
 static void
-configure_surface(struct weston_surface *es, int32_t sx, int32_t sy)
+configure_surface(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
 	struct weston_view *existing_view = es->committed_private;
 	struct weston_view *new_view;
@@ -456,7 +454,7 @@ shell_helper_add_surface_to_layer(struct wl_client *client,
 //TODO
 //Is this needed?
 static void
-configure_panel(struct weston_surface *es, int32_t sx, int32_t sy)
+configure_panel(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
 	struct shell_helper *helper = es->committed_private;
 	struct weston_view *view;
@@ -482,12 +480,16 @@ shell_helper_set_panel(struct wl_client *client,
 	struct weston_view *view = container_of(surface->views.next,
 						struct weston_view,
 						surface_link);
+  struct weston_coord_surface tmp;
 
 	/* we need to save the panel's layer so we can use it later on, but
 	 * it hasn't yet been defined because the original surface configure
 	 * function hasn't yet been called. if we call it here we will have
 	 * access to the layer. */
-	surface->committed(surface, 0, 0);
+	tmp = weston_coord_surface(0,
+				      0,
+				      surface);
+	surface->committed(surface, tmp);
 
 	helper->panel_layer = container_of(view->layer_link.link.next,
 					   struct weston_layer,
@@ -814,7 +816,7 @@ void fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec 
     1.0f);
 	//weston_matrix_scale(&esurface->transform.matrix, 2, 2, 1.0f);
 	//weston_matrix_scale(&esurface->transform.matrix, 2, 2, 1.0f);
-	//weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.x, esurface->y - esurface->view->geometry.y, 0);
+
 	weston_matrix_translate(&esurface->transform.matrix, 0, 0, 0);
 
 
@@ -1471,7 +1473,6 @@ is_shell_surface(struct weston_surface *surface)
 struct weston_view *
 get_default_view(struct weston_surface *surface)
 {
-	//struct shell_surface *shsurf;
 	struct weston_view *view;
 
 	if (!surface || wl_list_empty(&surface->views))
@@ -1551,7 +1552,9 @@ exposay_scale(struct exposay_surface *esurface)
 	//weston_matrix_scale(&esurface->transform.matrix, esurface->scale, esurface->scale, 1.0f);
 	weston_matrix_scale(&esurface->transform.matrix, esurface->scale, esurface->scale, 1.0f);
 	//weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.x, esurface->y - esurface->view->geometry.y, 0);
-	weston_matrix_translate(&esurface->transform.matrix, esurface->x - esurface->view->geometry.x, esurface->y - esurface->view->geometry.y, 0);
+	weston_matrix_translate(&esurface->transform.matrix,
+	  esurface->x - esurface->view->geometry.pos_offset.x,
+	  esurface->y - esurface->view->geometry.pos_offset.y, 0);
 
 
 	weston_view_geometry_dirty(esurface->view);
@@ -1765,6 +1768,7 @@ exposay_pick(struct desktop_shell *shell, int x, int y)
 	wl_list_for_each(esurface, &global_exposay.surface_list, link) {
 		if (x < esurface->x || x > esurface->x + esurface->width)
 			continue;
+
 		if (y < esurface->y || y > esurface->y + esurface->height)
 			continue;
 
@@ -1995,11 +1999,14 @@ exposay_motion(struct weston_pointer_grab *grab,
 
 	struct desktop_shell *shell = global_exposay.shell;
 
+	struct weston_coord_global pos;
+  pos = weston_pointer_motion_to_abs(grab->pointer, event);
 	weston_pointer_move(grab->pointer, event);
 
   exposay_pick(shell,
-	             wl_fixed_to_int(grab->pointer->x),
-	             wl_fixed_to_int(grab->pointer->y));
+	  (int)pos.c.x,
+	  (int)pos.c.y
+	);
 }
 
 static void

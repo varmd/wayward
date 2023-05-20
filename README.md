@@ -76,6 +76,8 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 
 ## Changelog
 
+1.2.3 - Update to Weston 12.0
+
 1.2.2 - Remove adwaita-icon-theme dependency due to upstream path changes.
 
 1.2.0 - Remove librsvg dependency. Reduces memory usage by upto 10MB. May cause issues with some icons.

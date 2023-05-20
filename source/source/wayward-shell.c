@@ -55,6 +55,8 @@
 
 //cairo scale
 
+//typedef uint64_t gint64;
+
 typedef gint64 gfixed;
 #define GINT_TO_FIXED(x)         ((gfixed) ((x) << 16))
 #define GDOUBLE_TO_FIXED(x)      ((gfixed) ((x) * (1 << 16) + 0.5))
@@ -1139,8 +1141,8 @@ _cairo_image_surface_scale_nearest (cairo_surface_t *image,
 	cairo_surface_t *scaled;
 	int              src_width;
 	int              src_height;
-	guchar          *p_src;
-	guchar          *p_dest;
+	guchar           *p_src;
+	guchar           *p_dest;
 	int              src_rowstride;
 	int              dest_rowstride;
 	gfixed           step_x, step_y;
@@ -1151,8 +1153,6 @@ _cairo_image_surface_scale_nearest (cairo_surface_t *image,
 	gfixed           max_row, max_col;
 	gfixed           x_src, y_src;
 	int              x, y;
-
-
 
 	src_width = cairo_image_surface_get_width  (image);
 
@@ -2574,7 +2574,6 @@ static void volume_set (double value) {
   {
     snd_mixer_selem_set_playback_volume_all (
       global_desktop->mixer, percentage_to_alsa_volume (value)
-      //global_desktop->mixer, value
     );
   }
 

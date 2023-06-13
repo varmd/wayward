@@ -76,6 +76,8 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 
 ## Changelog
 
+1.2.4 - Fix icons broken if there is no audio. Fix app icons missing if hide-apps is empty. Other minor fixes.
+
 1.2.3 - Update to Weston 12.0
 
 1.2.2 - Remove adwaita-icon-theme dependency due to upstream path changes.

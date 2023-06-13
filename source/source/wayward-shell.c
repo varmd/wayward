@@ -244,6 +244,7 @@ struct panel_launcher {
 	int focused, pressed, toggled;
   int force_x;
   int initial_x;
+  int offset_right;
 
   char *path;
 	struct wl_list link;
@@ -286,7 +287,7 @@ int global_monitor_count = 0;
 int global_panel_monitor = 1;
 int global_events_configured = 0;
 int global_keyboard_configured = 0;
-int global_menu_done = 0;
+
 int global_power_inhibit = 0;
 int global_clock_hide = 0;
 int global_panel_in = 0;
@@ -941,7 +942,8 @@ panel_resize_handler(struct widget *widget,
     //Special allocation x for volume/system launchers
     if(!panel->allocation_set) {
       wl_list_for_each(launcher, &panel->launcher_list, link) {
-        if( (_count >= count - 8) && (_count < count - 4) ) {
+        //if( (_count >= count - 8) && (_count < count - 4) ) {
+        if(launcher->offset_right) {
           widget_get_allocation(launcher->widget, &allocation);
           launcher->force_x = panel->clock_allocation.x - 20 - allocation.width * _count2;
           widget_set_allocation(launcher->widget, launcher->force_x, allocation.y,
@@ -1399,7 +1401,9 @@ load_icon_svg_or_fallback(const char *icon)
 	return surface;
 }
 
-static struct panel_launcher *panel_add_launcher(struct panel *panel, const char *icon, const char *path, int initial_x, void (*function)(struct panel_launcher *widget) )
+static struct panel_launcher *panel_add_launcher(struct panel *panel, const char *icon,
+   const char *path, int initial_x, void (*function)(struct panel_launcher *widget)
+    )
 {
 	struct panel_launcher *launcher;
 	char *start, *p, *eq, **ps;
@@ -1423,10 +1427,15 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
   }
 
   launcher->toggled = 0;
+  launcher->offset_right = 0;
 
   launcher->function = NULL;
-  if(function)
+  if(function) {
     launcher->function = function;
+    //move special launchers to the right
+    if(!launcher->initial_x)
+      launcher->offset_right = 1;
+  }
 
 
 	wl_array_init(&launcher->envp);
@@ -3043,9 +3052,10 @@ static void check_shm_commands(struct toytimer *tt) {
 
 //TODO add launchers with icons
 //TODO add svg
-static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
+static int wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 {
 
+  int found = 0;
   char *icon = NULL;
   char *path = NULL;
   char *line = NULL;
@@ -3057,21 +3067,16 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 
   struct weston_config_section *s;
   s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
-  weston_config_section_get_string(s, "hide-apps", &hide_apps, "");
+  weston_config_section_get_string(s, "hide-apps", &hide_apps, NULL);
 
   printf("Hide apps %s \n", hide_apps);
-
-
-  if(global_menu_done) {
-    return;
-  }
 
   //Run script to get cached entries
   //TODO use C instead
   if(system ("/usr/bin/bash /usr/lib/weston/wayward-lsdesktopf" )) {
     printf("error occured %s", strerror(errno));
 
-    return;
+    return found;
   }
 
 
@@ -3087,7 +3092,7 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 
   FILE* file = fopen(path_buf, "r");
   if(!file) {
-    return;
+    return found;
   }
 
 
@@ -3152,7 +3157,7 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
         free(path);
         icon = NULL;
         path = NULL;
-
+        found = 1;
       }
 
 
@@ -3170,6 +3175,7 @@ static void wayward_add_launchers(struct panel *panel, struct desktop *desktop)
   fclose(file);
 
   printf("File closed \n");
+  return found;
 }
 
 
@@ -3180,6 +3186,7 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 	char *icon, *path;
 	const char *name;
 	int count;
+	int shared_launchers = 0;
   struct rectangle clock_allocation;
   struct rectangle launcher_allocation;
 
@@ -3209,14 +3216,14 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 	}
 
   //Add launchers from /usr/share/applications
-  wayward_add_launchers(panel, desktop);
+  shared_launchers = wayward_add_launchers(panel, desktop);
 
 
-	if (count == 0) {
+	if (shared_launchers == 0 && count == 0) {
 		/* add default launcher */
 		panel_add_launcher(panel,
-				   file_name_with_datadir("terminal.png"),
-				   BINDIR "/weston-terminal",
+				   "/usr/share/wayward/utilities-terminal-symbolic.svg",
+				   BINDIR "/wayward-terminal",
            0,
            NULL
     );
@@ -3248,12 +3255,15 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
     launch_system
   );
 
-  panel_add_launcher(panel,
-   "/usr/share/wayward/multimedia-volume-control-symbolic.svg",
-    BINDIR "/weston-terminal",
-    0,
-    launch_volume
-  );
+
+  if(global_desktop->mixer_handle != NULL) {
+    panel_add_launcher(panel,
+     "/usr/share/wayward/multimedia-volume-control-symbolic.svg",
+      BINDIR "/weston-terminal",
+      0,
+      launch_volume
+    );
+  }
 
   //Add Restart button for system section
 
@@ -3279,20 +3289,20 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   widget_schedule_redraw(panel->reboot_launcher->widget);
   widget_schedule_redraw(panel->shutdown_launcher->widget);
 
-  if(global_desktop->mixer_handle == NULL)
+  if(!global_desktop->mixer_handle)
     return;
 
   //Add plus/minus button
   panel->volumedown_launcher = panel_add_launcher(panel,
 		"/usr/share/wayward/list-remove-symbolic.svg",
     BINDIR "/weston-terminal",
-    0,
+    WAYWARD_HIDE_X,
     clock_volume_down
   );
   panel->volumeup_launcher = panel_add_launcher(panel,
 		"/usr/share/wayward/list-add-symbolic.svg",
     BINDIR "/weston-terminal",
-    0,
+    WAYWARD_HIDE_X,
     clock_volume_up
   );
 

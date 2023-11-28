@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 varmd - https://github.com/varmd
+ * Copyright © 2021-2023 varmd - https://github.com/varmd
  * Copyright © 2011 Kristian Høgsberg
  * Copyright © 2011 Collabora, Ltd.
  *
@@ -52,6 +52,12 @@
 #include "nanosvg/nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvg/nanosvgrast.h"
+
+//xxtea
+#include "xxtea/xxtea.h"
+#include "xxtea/base64.h"
+
+
 
 //cairo scale
 
@@ -156,6 +162,7 @@ struct desktop {
 	struct weston_config *config;
 	bool locking;
 
+  char *pincode;
 	enum cursor_type grab_cursor;
 
 	int painted;
@@ -187,8 +194,6 @@ struct panel {
 	struct wl_list launcher_list;
 
 	struct wl_surface *wl_surface;
-
-
 
 	struct panel_clock *clock;
 	struct panel_clock *battery;
@@ -269,6 +274,9 @@ struct unlock_dialog {
 	struct widget *button;
 	int button_focused;
 	int closing;
+	int keys_entered;
+
+	char pincode[7];
 	struct desktop *desktop;
 };
 
@@ -377,6 +385,8 @@ enum shm_command {
   SHM_LAUNCH_BROWSER,
   SHM_LAUNCH_TERMINAL,
   SHM_LAUNCH_CALC,
+  SHM_BRIGHTNESS_UP,
+  SHM_BRIGHTNESS_DOWN,
 };
 static void panel_add_battery(struct panel *panel);
 
@@ -386,6 +396,30 @@ void wayland_pointer_leave_cb(void *data, struct wl_pointer *pointer, uint32_t s
 
 static void
 panel_add_launchers(struct panel *panel, struct desktop *desktop);
+
+static int xxtea_pincode_valid(char *pin_keyb64, char *pincode) {
+
+  const char *text = "Login password here super secret";
+  size_t len;
+
+
+  unsigned char *encrypt_data = xxtea_encrypt(text, strlen(text), pincode, &len);
+  char *base64_data_encrypted = base64_encode(encrypt_data, len);
+  free(encrypt_data);
+
+  if (strncmp(pin_keyb64, base64_data_encrypted, len) == 0) {
+      printf("success!\n");
+      printf("B64 pincode %s \n", base64_data_encrypted);
+      free(base64_data_encrypted);
+      return 1;
+  } else {
+      printf("wrong!\n");
+      free(base64_data_encrypted);
+      return 0;
+  }
+
+  return 0;
+}
 
 static void
 sigchild_handler(int s)
@@ -1638,6 +1672,7 @@ unlock_dialog_redraw_handler(struct widget *widget, void *data)
 	cairo_t *cr;
 	cairo_pattern_t *pat;
 	double cx, cy, r, f;
+	struct wl_surface *surface2;
 
 	cr = widget_cairo_create(widget);
 
@@ -1670,11 +1705,33 @@ unlock_dialog_redraw_handler(struct widget *widget, void *data)
 			      allocation.x + cx - r,
 			      allocation.y + cy - r, 2 * r, 2 * r);
 
+  for (int i = 0; i < dialog->keys_entered && i < 6; i++) {
+    	cx = 25;
+    	cy = 20;
+    	r = (cx < cy ? cx : cy) * 0.4;
+//    	pat = cairo_pattern_create_radial(cx*i, cy, r * 0.7, cx*i, cy, r);
+    	//cairo_pattern_add_color_stop_rgb(pat, 1.0, 0.2, 0.86, 0);
+    	//cairo_set_source(cr, pat);
+      set_hex_color(cr, 0xff0040ff);
+  		//cairo_set_source_rgba(cr, 0.3, 0.4, 0.2, 1.0);
+//    	cairo_pattern_destroy(pat);
+    	cairo_arc(cr, cx * ( i + 1), cy, r, 0.0, 2.0 * M_PI);
+    	cairo_fill(cr);
+  }
+
 	cairo_destroy(cr);
 
 	surface = window_get_surface(dialog->window);
 	cairo_surface_destroy(surface);
+
+  //focus keyboard for pin
+	surface2 = window_get_wl_surface(dialog->window);
+
+	shell_helper_keyboard_focus_surface(global_desktop->helper,
+	  surface2);
 }
+
+
 
 static void
 unlock_dialog_button_handler(struct widget *widget,
@@ -1685,6 +1742,16 @@ unlock_dialog_button_handler(struct widget *widget,
 	struct unlock_dialog *dialog = data;
 	struct desktop *desktop = dialog->desktop;
 
+	if (desktop->pincode != NULL) {
+	  if(
+	    !dialog->keys_entered ||
+  	  !xxtea_pincode_valid(desktop->pincode, dialog->pincode) != 0
+  	) {
+      return;
+    }
+	}
+
+
 	if (button == BTN_LEFT) {
 		if (state == WL_POINTER_BUTTON_STATE_RELEASED &&
 		    !dialog->closing) {
@@ -1693,6 +1760,123 @@ unlock_dialog_button_handler(struct widget *widget,
 		}
 	}
 }
+
+
+static void unlock_dialog_key_handler(struct window *window, struct input *input, uint32_t time,
+	    uint32_t key, uint32_t sym, enum wl_keyboard_key_state state,
+	    void *data)
+{
+  struct unlock_dialog *dialog = data;
+  struct desktop *desktop = dialog->desktop;
+  int add = 0;
+
+  if (state != WL_KEYBOARD_KEY_STATE_RELEASED) {
+    return;
+  }
+
+ switch (key) {
+
+    case KEY_ENTER:
+      unlock_dialog_button_handler(NULL,
+			     NULL, 0,
+			     BTN_LEFT,
+			     WL_POINTER_BUTTON_STATE_RELEASED, data);
+    break;
+    case KEY_BACKSPACE:
+      dialog->keys_entered = 0;
+      dialog->pincode[0] = 0;
+    break;
+    case KEY_0:
+    case KEY_1:
+    case KEY_2:
+    case KEY_3:
+    case KEY_4:
+    case KEY_5:
+    case KEY_6:
+    case KEY_7:
+    case KEY_8:
+    case KEY_9:
+
+      if(!desktop->pincode) {
+        return;
+      }
+
+      printf("Entered key %d %c \n", (unsigned int)key,
+        keycode_to_vkey[(unsigned int)key]);
+
+
+      if(dialog->keys_entered < 6) {
+
+        if(dialog->keys_entered > 0)
+          add = strlen(dialog->pincode);
+
+        sprintf(dialog->pincode + add,
+          "%c",
+          keycode_to_vkey[(unsigned int)key]);
+        printf("Entered %s \n", dialog->pincode);
+
+        dialog->keys_entered++;
+
+      }
+
+    break;
+
+    default:
+    break;
+  }
+
+
+  widget_schedule_redraw(dialog->widget);
+
+  /*
+
+
+  //struct widget *widget = dialog->widget;
+  printf("Key entered \n");
+
+  struct rectangle allocation;
+  cairo_surface_t *surface;
+	cairo_t *cr;
+	cairo_pattern_t *pat;
+	double cx, cy, r, f;
+
+	cr = widget_cairo_create(dialog->widget);
+
+	widget_get_allocation(dialog->widget, &allocation);
+	cairo_rectangle(cr, allocation.x, allocation.y,
+			allocation.width, allocation.height);
+	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+	cairo_set_source_rgba(cr, 0, 0, 0, 0.6);
+	cairo_fill(cr);
+
+	cairo_translate(cr, allocation.x, allocation.y);
+	if (dialog->button_focused)
+		f = 1.0;
+	else
+		f = 0.7;
+
+	cx = allocation.width / 12.0;
+	cy = allocation.height / 12.0;
+	r = (cx < cy ? cx : cy) * 0.4;
+	pat = cairo_pattern_create_radial(cx, cy, r * 0.7, cx, cy, r);
+	cairo_pattern_add_color_stop_rgb(pat, 0.0, 0, 0.86 * f, 0);
+	cairo_pattern_add_color_stop_rgb(pat, 0.85, 0.2 * f, f, 0.2 * f);
+	cairo_pattern_add_color_stop_rgb(pat, 1.0, 0, 0.86 * f, 0);
+	cairo_set_source(cr, pat);
+	cairo_pattern_destroy(pat);
+	cairo_arc(cr, cx, cy, r, 0.0, 2.0 * M_PI);
+	cairo_fill(cr);
+
+
+ cairo_destroy(cr);
+
+	surface = window_get_surface(dialog->window);
+	cairo_surface_destroy(surface);
+
+*/
+}
+
+
 
 static void
 unlock_dialog_touch_down_handler(struct widget *widget, struct input *input,
@@ -1760,11 +1944,12 @@ unlock_dialog_create(struct desktop *desktop)
 
 	dialog->window = window_create_custom(display);
 	dialog->widget = window_frame_create(dialog->window, dialog);
-	window_set_title(dialog->window, "Unlock your desktop");
+	window_set_title(dialog->window, "Unlock desktop");
 
 	window_set_user_data(dialog->window, dialog);
 	window_set_keyboard_focus_handler(dialog->window,
 					  unlock_dialog_keyboard_focus_handler);
+  window_set_key_handler(dialog->window, unlock_dialog_key_handler);
 	dialog->button = widget_add_widget(dialog->widget, dialog);
 	widget_set_redraw_handler(dialog->widget,
 				  unlock_dialog_redraw_handler);
@@ -2042,12 +2227,12 @@ output_handle_mode(void *data,
 
   if(width > global_desktop_width) {
     global_desktop_width = width;
-    printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
   }
   if(height > global_desktop_height) {
     global_desktop_height = height;
-    printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
   }
+
+  printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
 
   //Set panel initial position
 
@@ -2997,17 +3182,53 @@ clock_restart ()
   execl ("/usr/bin/sudo", "/usr/bin/sudo", "/usr/bin/systemctl", "reboot", (char *)0);
 }
 
+static void brightnessctl (int dir) {
+  printf("Brightness up %d  \n", dir);
+  pid_t pid;
+  pid = fork();
+	if (pid < 0) {
+		fprintf(stderr, "fork failed: %s\n", strerror(errno));
+		return;
+	}
+
+	if (pid)
+		return;
+
+
+	if (setsid() == -1)
+		exit(EXIT_FAILURE);
+
+
+
+//	char *argv[] = {"/usr/bin/brightnessctl", "s", "5+", " > /tmp/d1", NULL};
+//    posix_spawn(&pid, "/usr/bin/brightnessctl", NULL, NULL, argv, environ);
+
+//  return;
+
+  if(dir > 0) {
+    char *newargv[] = { "/usr/bin/brightnessctl", "s", "5%+", "", NULL };
+    execve(newargv[0], newargv, environ);
+  } else {
+    char *newargv[] = { "/usr/bin/brightnessctl", "s", "5%-", "", NULL };
+    execve(newargv[0], newargv, environ);
+  }
+}
+
 
 
 static void check_shm_commands(struct toytimer *tt) {
-  const char *name = "/wayward-shared_mem";
+  char name[70];
 
-  //printf("SHM timer \n");
 
   static int shm_init = 0;
   static void *ptr = NULL;
   static int shm_fd = 0;
+  uid_t uid = 0;
   if(!shm_init) {
+    uid = geteuid();
+    printf("/wayward-shared_mem%d \n", uid);
+    sprintf(name, "/wayward-shared_mem%d", uid);
+
     shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
     ftruncate(shm_fd, sizeof(int) );
     ptr = mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, shm_fd, 0);\
@@ -3018,6 +3239,7 @@ static void check_shm_commands(struct toytimer *tt) {
       printf("SHM Mapping failed. Keyboard shortcuts disabled \n");
       return;
     }
+
   }
 
 
@@ -3036,6 +3258,10 @@ static void check_shm_commands(struct toytimer *tt) {
     clock_volume_up();
   } else if(test == SHM_VOLUMEDOWN) {
     clock_volume_down();
+  } else if(test == SHM_BRIGHTNESS_UP) {
+    brightnessctl(1);
+  } else if(test == SHM_BRIGHTNESS_DOWN) {
+    brightnessctl(0);
   } else if(test == SHM_SHUTDOWN) {
     clock_shutdown();
   } else if(test == SHM_RESTART) {
@@ -3045,6 +3271,8 @@ static void check_shm_commands(struct toytimer *tt) {
   } else if(test == SHM_LAUNCH_BROWSER) {
     launch_browser();
   }
+
+  printf("SHM on \n");
 
 }
 
@@ -3383,6 +3611,10 @@ int main(int argc, char *argv[])
 	desktop.config = weston_config_parse(config_file);
 	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
 	weston_config_section_get_bool(s, "locking", &desktop.locking, true);
+
+  weston_config_section_get_string(s, "pin-code", &desktop.pincode, NULL);
+//  desktop.pincode = "wyuQRH90gc4arvr9naCBMtuluE/eLxGKg/Bt9WNkRNfk+NS2";
+
 	parse_panel_position(&desktop, s);
 	parse_clock_format(&desktop, s);
 

@@ -74,7 +74,17 @@ Edit weston.ini and add hide-apps to the shell section. For example
 
 Wallpapers are changed from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-background-image
 
+## Pincodes
+
+Since 1.2.5 it is now possible to set numeric, up to six digit, pincodes for the lock screen.
+Pincodes for now are only entered with keyboard. Use Enter to confirm pincode, Backspace to erase entered pincode.
+To set a pincode run as root:
+
+    wayward-set-pincode 335545 username
+
 ## Changelog
+
+1.2.5 - Add pincode to lock screen
 
 1.2.4 - Fix icons broken if there is no audio. Fix app icons missing if hide-apps is empty. Other minor fixes.
 

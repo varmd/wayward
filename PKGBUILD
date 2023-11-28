@@ -1,5 +1,5 @@
 pkgname=wayward
-pkgver=1.2.4
+pkgver=1.2.6
 pkgrel=2
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
@@ -8,7 +8,6 @@ url="https://github.com/varmd/wayward"
 license=('GPL')
 provides=("wayward")
 depends=("weston" "ttf-droid" "alsa-lib")
-
 makedepends=( "fakeroot" "gcc")
 
 export _source="$PWD"

@@ -25,7 +25,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+
 #include <string.h>
+#include <libgen.h>
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -286,6 +288,8 @@ enum shm_command {
   SHM_LAUNCH_BROWSER,
   SHM_LAUNCH_TERMINAL,
   SHM_LAUNCH_CALC,
+  SHM_BRIGHTNESS_UP,
+  SHM_BRIGHTNESS_DOWN,
 };
 
 static void setup_shm(int shm_command);
@@ -710,14 +714,19 @@ void load_gamma(struct weston_surface *surface)
 static void
 shell_helper_keyboard_focus_surface(struct wl_client *client,
 			   struct wl_resource *resource,
-                           struct wl_resource *surface_resource)
+			   struct wl_resource *surface_resource)
 {
 
 //  struct weston_keyboard *keyboard = weston_seat_get_keyboard(panel_seat);
   if(!panel_keyboard) {
+    panel_keyboard = weston_seat_get_keyboard(global_weston_seat);
+  }
+  if(!panel_keyboard) {
+    printf("Error focus no panel_keyboard \n");
     return;
   }
-  if(!panel_keyboard || wl_resource_get_user_data(surface_resource)) {
+//  if(!panel_keyboard || wl_resource_get_user_data(surface_resource)) {
+  if(!panel_keyboard) {
     printf("Error focus \n");
   } else {
     weston_keyboard_set_focus(panel_keyboard, wl_resource_get_user_data(surface_resource));
@@ -736,6 +745,15 @@ void volumeup_binding(struct weston_keyboard *keyboard, const struct timespec *t
 
 void volumedown_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
   setup_shm(SHM_VOLUMEDOWN);
+}
+
+
+void brightnessup_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_BRIGHTNESS_UP);
+}
+
+void brightnessdown_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
+  setup_shm(SHM_BRIGHTNESS_DOWN);
 }
 
 
@@ -874,6 +892,12 @@ debug_binding(struct weston_keyboard *keyboard, const struct timespec *time, uin
   //struct weston_keyboard *keyboard = weston_seat_get_keyboard(panel_seat);
   panel_keyboard = keyboard;
   printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
+  printf("panel_keyboard set \n");
   weston_keyboard_set_focus(keyboard, data);
 }
 
@@ -904,14 +928,14 @@ shell_helper_bind_key_panel(struct wl_client *client,
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEDOWN , 0, volumedown_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEUP , 0, volumeup_binding, shell);
 
+  weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSUP, 0, brightnessup_binding, shell);
+  weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSDOWN, 0, brightnessdown_binding, shell);
+
 
 
   weston_compositor_add_key_binding(helper->compositor, KEY_S , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, shutdown_binding, shell);
-
   weston_compositor_add_key_binding(helper->compositor, KEY_R , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, restart_binding, shell);
-
   weston_compositor_add_key_binding(helper->compositor, KEY_T , MODIFIER_SUPER | MODIFIER_SHIFT, terminal_binding, shell);
-
   weston_compositor_add_key_binding(helper->compositor, KEY_HOMEPAGE, 0, browser_binding, shell);
 
   printf("Added key bindings \n");
@@ -938,7 +962,6 @@ shell_helper_change_gamma(struct wl_client *client,
   }
 
    if(!reset) {
-      weston_log ("Yes set gamma \r\n");
       weston_log("gamma size is %d  \n", surface->output->gamma_size);
 
 
@@ -951,9 +974,6 @@ shell_helper_change_gamma(struct wl_client *client,
   //dat->fd = fd;
 
   // open files as necessary
-
-  weston_log("ewfewf efewf\n");
-
 	load_fd = -2;
 	load_fd = open("/usr/lib/weston/warm.dat", O_RDONLY);
 	if (load_fd < 0) {
@@ -1357,31 +1377,35 @@ helper_destroy(struct wl_listener *listener, void *data)
 
 
 static void setup_shm(int shm_command) {
-  //shm create
-
-  const char *name = "/wayward-shared_mem";
+  char name[70];
+  uid_t uid = 0;
   static int shm_fd = 0;
   static int shm_init = 0;
   static void *ptr;
+
   if(shm_init < 1) {
+
+    uid = geteuid();
+    sprintf(name, "/wayward-shared_mem%d", uid);
+    weston_log("/wayward-shared_mem%d \n", uid);
     shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
     ftruncate(shm_fd, sizeof(int) );
     ptr = mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, shm_fd, 0);
     shm_init = 1;
   }
 
-
   if(ptr < 0)
   {
-      perror("Mapping failed");
-      exit(0);
+    weston_log("Mapping failed \n");
+    perror("Mapping failed");
+    exit(0);
   }
   int test = shm_command;
   memcpy((int*)ptr, &test, sizeof(int));
 
   memcpy(&test, (int *)ptr, sizeof(int));
 
-  printf("SHM is %d \n", test);
+  weston_log("SHM is %d \n", test);
 }
 
 //TODO adapt to multiple monitors
@@ -1418,8 +1442,10 @@ wet_module_init(struct weston_compositor *ec,
 			if (keyboard) {
         global_weston_seat = seat;
 				printf("Found keyboard and seat \n");
+				weston_log("Found keyboard and seat \n");
       }  else {
         printf("Not found keyboard and seat \n");
+        weston_log("Not found keyboard and seat \n");
       }
 		}
 
@@ -1428,13 +1454,12 @@ wet_module_init(struct weston_compositor *ec,
 	helper->destroy_listener.notify = helper_destroy;
 	wl_signal_add(&ec->destroy_signal, &helper->destroy_listener);
 
+
 	if (wl_global_create(ec->wl_display, &shell_helper_interface, 1,
 			     helper, bind_helper) == NULL)
 		return -1;
 
-
   setup_shm(SHM_START);
-
 	return 0;
 }
 

@@ -1,0 +1,62 @@
+#!/bin/bash
+
+rm_if_link(){ [ ! -L "$1" ] || rm "$1"; }
+
+if [[ -z "$1" ]]; then
+  echo "Needs up to six digit numeric pin code. "
+  echo "For example wayward-set-pincode 325451 username";
+  exit;
+
+fi
+if [[ -z "$2" ]]; then
+  echo "Needs username. "
+  echo "For example wayward-set-pincode 325451 username";
+  exit;
+
+fi
+
+
+
+if [[ ! -d "/home/${2}" ]]; then
+  echo "Username folder does not exist. "
+  exit;
+fi
+
+CONFIG_PATH=/home/${2}/.config/weston/weston.ini
+CONFIG_FOLDER=/home/${2}/.config/weston/
+mkdir -p /home/${2}/.config/weston/
+
+rm_if_link /home/${2}/.config/weston.ini
+
+mv /home/${2}/.config/weston.ini /home/${2}/.config/weston/weston.ini 2>/dev/null
+
+if [[ ! -e "/home/${2}/.config/weston/weston.ini" ]]; then
+  echo "Weston.ini does not exist. Creating one"
+  mkdir -p /home/$2/.config/
+  echo "[shell]" > /home/$2/.config/weston/weston.ini
+fi
+
+
+ln -s $CONFIG_PATH /home/${2}/.config/weston.ini
+
+chown root:root $CONFIG_FOLDER
+chown root:root $CONFIG_PATH
+chmod +w $CONFIG_PATH
+
+PINCODE=`/usr/lib/weston/wayward-pincode $1`
+
+sed -i '/allow-zap/d' $CONFIG_PATH
+sed -i '/pin-code/d' $CONFIG_PATH
+
+
+shell_string="[shell]\nallow-zap=false\npin-code=$PINCODE"
+sed -i "s|\[shell\]|$shell_string|" $CONFIG_PATH
+chown root:root $CONFIG_PATH
+chmod -w $CONFIG_PATH
+chmod -w $CONFIG_FOLDER
+chmod +r $CONFIG_FOLDER
+chmod +r $CONFIG_PATH
+
+echo "Pincode set"
+echo "You will now need root permissions to modify /home/${2}/.config/weston.ini"
+

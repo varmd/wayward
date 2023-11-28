@@ -17,6 +17,7 @@ GTK_CFLAGS="-std=c11 -pthread \
 -I. \
 -I.. \
 -I../shared/ \
+-Ixxtea/ \
 -I/usr/include \
 -I/usr/include/cairo \
 -I/usr/include/pixman-1 \
@@ -67,7 +68,12 @@ cd `dirname $0`
   "
 
   WAYWARD_SOURCES="\
-    wayward-shell.c \
+    wayward-shell.c
+  "
+
+  XXTEA_SOURCES="\
+    xxtea/xxtea/xxtea.c \
+    xxtea/xxtea/base64.c \
   "
 
   SHELL_HELPER_SOURCES="\
@@ -76,7 +82,11 @@ cd `dirname $0`
 
 gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o wayward-terminal
 
-gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm -o wayward
+gcc ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${XXTEA_SOURCES}  \
+   ${WINDOW_SOURCES} ${GTK_LIBS} -lm -o wayward
+
+gcc ${GTK_CFLAGS} xxtea/wayward-pincode.c \
+  ${XXTEA_SOURCES} -o wayward-pincode
 
 gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
 

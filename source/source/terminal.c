@@ -930,6 +930,29 @@ struct color_scheme DEFAULT_COLORS = {
 	{7, 0, 0, }                    /* bg:black (0), fg:light gray (7)  */
 };
 
+struct color_scheme DEFAULT_RED_COLORS = {
+	{
+		{0.66, 0,    0,    1}, /* red */
+		{0.66, 0,    0,    1}, /* red */
+		{0  ,  0.66, 0,    1}, /* green */
+		{0.66, 0.33, 0,    1}, /* orange (nicer than muddy yellow) */
+		{0  ,  0  ,  0.66, 1}, /* blue */
+		{0.66, 0  ,  0.66, 1}, /* magenta */
+		{0,    0.66, 0.66, 1}, /* cyan */
+		{1,    1,    1,    1},  /* white */
+		{0.22, 0.33, 0.33, 1}, /* dark grey */
+		{1,    0.33, 0.33, 1}, /* high red */
+		{0.33, 1,    0.33, 1}, /* high green */
+		{1,    1,    0.33, 1}, /* high yellow */
+		{0.33, 0.33, 1,    1}, /* high blue */
+		{1,    0.33, 1,    1}, /* high magenta */
+		{0.33, 1,    1,    1}, /* high cyan */
+		{1,    1,    1,    1}  /* white */
+	},
+	1,                             /* black border */
+	{7, 0, 0, }                     /* bg:red (0), fg:light gray (7)  */
+};
+
 static void
 terminal_set_color(struct terminal *terminal, cairo_t *cr, int index)
 {
@@ -2317,11 +2340,28 @@ terminal_new_instance(struct terminal *terminal)
 		terminal_destroy(new_terminal);
 }
 
+
+static void
+terminal_change_color(struct terminal *terminal, struct color_scheme *color_scheme)
+{
+	struct terminal *new_terminal;
+
+  terminal->color_scheme = color_scheme;
+  //terminal_init(terminal);
+  init_color_table(terminal);
+	widget_schedule_redraw(terminal->widget);
+	window_schedule_redraw(terminal->window);
+
+}
+
 static int
 handle_bound_key(struct terminal *terminal,
 		 struct input *input, uint32_t sym, uint32_t time)
 {
 	switch (sym) {
+	case XKB_KEY_Q:
+  	terminal_destroy(terminal);
+	  return 1;
 	case XKB_KEY_X:
 		/* Cut selection; terminal doesn't do cut, fall
 		 * through to copy. */
@@ -2386,6 +2426,14 @@ key_handler(struct window *window, struct input *input, uint32_t time,
 	    state == WL_KEYBOARD_KEY_STATE_PRESSED &&
 	    handle_bound_key(terminal, input, sym, time))
 		return;
+
+  if ((modifiers & MOD_CONTROL_MASK) &&
+    state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+	  (sym == XKB_KEY_Q || sym == XKB_KEY_q)
+	) {
+  	terminal_destroy(terminal);
+	  return;
+	}
 
 	/* Map keypad symbols to 'normal' equivalents before processing */
 	switch (sym) {
@@ -2746,6 +2794,9 @@ menu_func(void *data, struct input *input, int index)
 	case 3:
 		terminal_minimize(terminal);
 		break;
+	case 4:
+		terminal_change_color(terminal, &DEFAULT_RED_COLORS);
+		break;
 	}
 }
 
@@ -2754,7 +2805,7 @@ show_menu(struct terminal *terminal, struct input *input, uint32_t time)
 {
 	int32_t x, y;
 	static const char *entries[] = {
-		"Open Terminal", "Copy", "Paste", "Minimize"
+		"Open Terminal", "Copy", "Paste", "Minimize", "Red Color"
 	};
 
 	input_get_position(input, &x, &y);
@@ -3112,7 +3163,7 @@ terminal_run(struct terminal *terminal, const char *path)
 	else if (option_maximize)
 		window_set_maximized(terminal->window, 1);
 	else
-		terminal_resize(terminal, 80, 30);
+		terminal_resize(terminal, 100, 30);
 
 	return 0;
 }

@@ -166,6 +166,7 @@ struct desktop {
 	enum cursor_type grab_cursor;
 
 	int painted;
+
 };
 
 struct surface {
@@ -209,6 +210,7 @@ struct panel {
 
 
 	int painted;
+	int initial;
 	int allocation_set;
 	enum weston_desktop_shell_panel_position panel_position;
 	enum clock_format clock_format;
@@ -651,13 +653,17 @@ static void panel_focus_handler(struct window *window,
     struct input *device, void *data) {
 
   struct panel_launcher *launcher;
+  struct panel *panel = data;
   int flag = 0;
 
   if(!device) {
     return;
   }
+
+
+
   shell_helper_move_surface (global_desktop->helper,
-    global_desktop->panel->wl_surface,
+    panel->wl_surface,
     WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
   );
 
@@ -700,6 +706,13 @@ panel_redraw_handler(struct widget *widget, void *data)
     printf("Already painted \n");
     return;
   }
+
+
+  if(!panel->initial) {
+    panel->initial = 1;
+
+  }
+
 	cr = widget_cairo_create(panel->widget);
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 	set_hex_color(cr, panel->color);
@@ -915,7 +928,6 @@ panel_resize_handler(struct widget *widget,
   }  else {
     printf("Resizing panel \n");
   }
-
 
 	int x = 0;
 	int y = 0;
@@ -2234,13 +2246,6 @@ output_handle_mode(void *data,
 
   printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
 
-  //Set panel initial position
-
-  shell_helper_move_surface (global_desktop->helper,
-      global_desktop->panel->wl_surface,
-      WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
-  );
-
 }
 
 static void
@@ -2280,9 +2285,19 @@ output_init(struct output *output, struct desktop *desktop)
     output->panel->wl_surface = surface;
 
 		weston_desktop_shell_set_panel(desktop->shell,
-					       output->output, surface);
+		  output->output, surface);
 
     shell_helper_set_panel (desktop->helper, surface);
+
+    printf("2 \n");
+    //Set panel initial position
+    if(!output->panel->wl_surface)
+      exit(1);
+    printf("3 \n");
+
+
+
+    printf("4 \n");
 
     if(!desktop->panel)
       desktop->panel = output->panel;
@@ -2383,6 +2398,7 @@ void wayland_pointer_enter_cb(void *data,
   if(!global_desktop || !global_desktop->panel)
     return;
 
+
   if(surface == global_desktop->panel->wl_surface) {
     global_panel_in = 1;
     shell_helper_move_surface (global_desktop->helper,
@@ -2398,10 +2414,9 @@ void wayland_pointer_leave_cb(void *data,
   if(!global_desktop || !global_desktop->panel || global_panel_in_y > WAYWARD_PANEL_LEAVE_BUG_Y)
     return;
 
-
   if(surface == global_desktop->panel->wl_surface) {
     global_panel_in = 0;
-    printf("Moving panel surface left %p %p \n", surface, global_desktop->panel->wl_surface);
+    printf("Hiding panel surface \n");
     shell_helper_move_surface (global_desktop->helper,
         global_desktop->panel->wl_surface,
         WAYWARD_NO_MOVE_X, global_desktop_height - 5
@@ -3573,6 +3588,7 @@ parse_panel_position(struct desktop *desktop, struct weston_config_section *s)
 			fprintf(stderr, "Wrong panel position: %s\n", position);
 		desktop->want_panel = 0;
 	}
+	desktop->want_panel = 1;
 	free(position);
 }
 

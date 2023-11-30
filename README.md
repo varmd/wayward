@@ -54,6 +54,7 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 ## Keyboard shortcuts
 
 * `Super + a` - See list of open applications. Use cursor or mouse to select. Press q to close an open app, right click to close an open app
+* `Super + z` - See list of open applications except minimized applications.
 * `Super + e` - Open app panel. Use mouse or Tab, cursor keys <- -> to navigate
 * `Volume mute` - Mute volume
 * `Volume up` - Volume up
@@ -78,11 +79,14 @@ Wallpapers are changed from weston.ini. See weston.ini documentation - https://w
 
 Since 1.2.5 it is now possible to set numeric, up to six digit, pincodes for the lock screen.
 Pincodes for now are only entered with keyboard. Use Enter to confirm pincode, Backspace to erase entered pincode.
-To set a pincode run as root:
+To set a pincode run as root wayward-set-pincode, and then restart weston. For example
 
     wayward-set-pincode 335545 username
 
+
 ## Changelog
+
+1.3.0 - Update to Weston 13.0. Add red color option to the wayward-terminal. Add list of open apps without minimized apps.
 
 1.2.5 - Add pincode to lock screen
 

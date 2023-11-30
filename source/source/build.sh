@@ -1,6 +1,6 @@
 #!/bin/bash
 
-WESTON_VER=12
+WESTON_VER=13
 
 cd `dirname $0`
 
@@ -80,7 +80,7 @@ cd `dirname $0`
     shell-helper.c \
   "
 
-gcc -Wno-deprecated-declarations  ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o wayward-terminal
+gcc ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o wayward-terminal
 
 gcc ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${XXTEA_SOURCES}  \
    ${WINDOW_SOURCES} ${GTK_LIBS} -lm -o wayward

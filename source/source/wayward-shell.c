@@ -60,7 +60,6 @@
 
 
 //cairo scale
-
 //typedef uint64_t gint64;
 
 typedef gint64 gfixed;

@@ -953,6 +953,30 @@ struct color_scheme DEFAULT_RED_COLORS = {
 	{7, 0, 0, }                     /* bg:red (0), fg:light gray (7)  */
 };
 
+struct color_scheme DEFAULT_BLUE_COLORS = {
+	{
+		{0  ,  0  ,  0.66, 1}, /* blue */
+		{0  ,  0  ,  0.66, 1}, /* red */
+		{0  ,  0.66, 0,    1}, /* green */
+		{0.66, 0.33, 0,    1}, /* orange (nicer than muddy yellow) */
+		{0  ,  0  ,  0.66, 1}, /* blue */
+		{0.66, 0  ,  0.66, 1}, /* magenta */
+		{0,    0.66, 0.66, 1}, /* cyan */
+		{1,    1,    1,    1},  /* white */
+		{0.22, 0.33, 0.33, 1}, /* dark grey */
+		{1,    0.33, 0.33, 1}, /* high red */
+		{0.33, 1,    0.33, 1}, /* high green */
+		{1,    1,    0.33, 1}, /* high yellow */
+		{0.33, 0.33, 1,    1}, /* high blue */
+		{1,    0.33, 1,    1}, /* high magenta */
+		{0.33, 1,    1,    1}, /* high cyan */
+		{1,    1,    1,    1}  /* white */
+	},
+	1,                   /* black border */
+	{7, 0, 0, }          /* bg:high blue (0), fg:light gray (7)  */
+};
+
+
 static void
 terminal_set_color(struct terminal *terminal, cairo_t *cr, int index)
 {
@@ -2643,11 +2667,13 @@ key_handler(struct window *window, struct input *input, uint32_t time,
 
 		/* Hide cursor, except if this was coming from a
 		 * repeating key press. */
+		#if 0
 		serial = display_get_serial(terminal->display);
 		if (terminal->hide_cursor_serial != serial) {
 			input_set_pointer_image(input, CURSOR_BLANK);
 			terminal->hide_cursor_serial = serial;
 		}
+		#endif
 	}
 }
 
@@ -2797,6 +2823,9 @@ menu_func(void *data, struct input *input, int index)
 	case 4:
 		terminal_change_color(terminal, &DEFAULT_RED_COLORS);
 		break;
+	case 5:
+		terminal_change_color(terminal, &DEFAULT_BLUE_COLORS);
+		break;
 	}
 }
 
@@ -2805,7 +2834,7 @@ show_menu(struct terminal *terminal, struct input *input, uint32_t time)
 {
 	int32_t x, y;
 	static const char *entries[] = {
-		"Open Terminal", "Copy", "Paste", "Minimize", "Red Color"
+		"Open Terminal", "Copy", "Paste", "Minimize", "Red", "Blue"
 	};
 
 	input_get_position(input, &x, &y);

@@ -105,7 +105,7 @@ typedef gint64 gfixed;
 #define WAYWARD_PANEL_LEAVE_BUG_Y 47
 #define WAYWARD_ICON_SIZE 32
 #define WAYWARD_AUDIO_STEP 3
-#define WAYWARD_BATTERY_X 345
+#define WAYWARD_BATTERY_X 69
 #define WAYWARD_BATTERY_Y 30
 
 //https://github.com/rev22/svgViewer/blob/master/svgViewer.c
@@ -125,6 +125,7 @@ enum clock_state {
 	CLOCK_SHOWN,
 	SYSTEM_SHOWN,
 	VOLUME_SHOWN,
+	BRIGHTNESS_SHOWN,
 	CLOCK_NONE
 };
 
@@ -154,12 +155,21 @@ struct desktop {
   long current_volume;
   double current_volume_percentage;
 
+  int current_brightness;
+	bool enable_brightness_ddc;
+	int ddc_i2c_number;
+	bool enable_brightness_ctl;
+	char *brightnessctl_device;
+
+	int right_icons;
+
   struct toytimer shm_timer;
 
   struct panel *panel;
 
 	struct weston_config *config;
 	bool locking;
+
 
   char *pincode;
 	enum cursor_type grab_cursor;
@@ -189,6 +199,7 @@ struct panel {
 
 	struct output *owner;
 
+
 	struct window *window;
 	struct widget *widget;
 	struct wl_list launcher_list;
@@ -207,16 +218,20 @@ struct panel {
   struct panel_launcher *volumeup_launcher;
   struct panel_label *volume_label;
 
+  struct panel_launcher *brightnessdown_launcher;
+  struct panel_launcher *brightnessup_launcher;
+  struct panel_label *brightness_label;
 
 	int painted;
 	int initial;
 	int allocation_set;
 	enum weston_desktop_shell_panel_position panel_position;
 	enum clock_format clock_format;
-
   enum clock_state clock_state;
 
 	uint32_t color;
+
+	struct desktop *desktop;
 };
 
 struct background {
@@ -392,6 +407,7 @@ enum shm_command {
 static void panel_add_battery(struct panel *panel);
 
 static void launch_volume(struct panel_launcher *launcher);
+static void launch_brightness(struct panel_launcher *launcher);
 static void launch_system(struct panel_launcher *launcher);
 void wayland_pointer_leave_cb(void *data, struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface);
 
@@ -463,6 +479,18 @@ check_desktop_ready(struct window *window)
 	}
 }
 
+static void clock_hide(struct panel_clock *clock) {
+  clock->force_x = WAYWARD_HIDE_X;
+  widget_set_allocation(clock->widget,
+    clock->force_x,
+    clock->panel->clock_allocation.y,
+		clock->panel->clock_allocation.width,
+    clock->panel->clock_allocation.height
+  );
+}
+static void clock_show(struct widget *widget) {
+}
+
 static void
 panel_launcher_activate(struct panel_launcher *widget)
 {
@@ -502,6 +530,10 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 	struct rectangle allocation;
 	cairo_t *cr;
 
+//  if(launcher->force_x == WAYWARD_HIDE_X) {
+//    return;
+//  }
+
 	cr = widget_cairo_create(launcher->panel->widget);
 
 	widget_get_allocation(widget, &allocation);
@@ -525,7 +557,8 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
     allocation.x = launcher->force_x;
   }
 
-  //printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
+  if(launcher == launcher->panel->volumeup_launcher)
+    printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
   //cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
 	cairo_set_source_surface(cr, launcher->icon,
 				 allocation.x, allocation.y);
@@ -706,10 +739,8 @@ panel_redraw_handler(struct widget *widget, void *data)
     return;
   }
 
-
   if(!panel->initial) {
     panel->initial = 1;
-
   }
 
 	cr = widget_cairo_create(panel->widget);
@@ -816,6 +847,8 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 	if (allocation.width == 0)
 		return;
 
+	if(clock->panel->clock_state != CLOCK_SHOWN)
+	  return;
 
   clock->panel->painted = 0;
 	cr = widget_cairo_create(clock->panel->widget);
@@ -838,7 +871,7 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 
 	allocation.y += allocation.height / 2 - 1 + extents.height / 2;
 	//cairo_move_to(cr, allocation.x + 1, allocation.y + 1);
-	//cairo_set_source_rgba(cr, 0, 0, 0, 0.85);
+
 	cairo_show_text(cr, string);
 	cairo_move_to(cr, allocation.x, allocation.y);
 	cairo_set_source_rgba(cr, 1, 1, 1, 0.85);
@@ -932,15 +965,32 @@ panel_resize_handler(struct widget *widget,
 	int y = 0;
 	int w = height > width ? width : height;
 	int h = w;
-	int horizontal = panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP || panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
+	int horizontal =
+	  panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP || panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
 	int first_pad_h = horizontal ? 0 : DEFAULT_SPACING / 2;
 	int first_pad_w = horizontal ? DEFAULT_SPACING / 2 : 0;
   int count = 0;
-  int _count = 0;
-  int _count2 = 5;
+
+  static int right_icons = 0;
+  int _count2 = 0;
   struct rectangle allocation;
 
+  //Special allocation x for volume/system launchers
+  if(!right_icons) {
+    wl_list_for_each(launcher, &panel->launcher_list, link) {
+      if(launcher->offset_right) {
+        right_icons++;
+      }
+    }
+    right_icons++;
+  }
+  _count2 = right_icons;
+  panel->desktop->right_icons = right_icons;
+
+  printf("_count2 is %d \n", _count2);
+
   if(!panel->allocation_set) {
+
     wl_list_for_each(launcher, &panel->launcher_list, link) {
       //Special case for shutdown/volume icons
       if(!launcher->initial_x) {
@@ -951,10 +1001,12 @@ panel_resize_handler(struct widget *widget,
           w + first_pad_w + 1, h + first_pad_h + 1);
       }
 
-      if (horizontal)
-        x += w + first_pad_w;
-      else
+      if (horizontal) {
+        if(launcher->initial_x != WAYWARD_HIDE_X)
+          x += w + first_pad_w;
+      } else {
         y += h + first_pad_h;
+      }
       first_pad_h = first_pad_w = 0;
       count++;
     }
@@ -972,6 +1024,7 @@ panel_resize_handler(struct widget *widget,
 
 
 	if (panel->clock) {
+
     if(!panel->clock->force_x)
 		  widget_set_allocation(panel->clock->widget,
 				      x, y, w + 1, h + 1);
@@ -984,10 +1037,10 @@ panel_resize_handler(struct widget *widget,
 
     widget_get_allocation(panel->clock->widget, &allocation);
 
-    //Special allocation x for volume/system launchers
-    if(!panel->allocation_set) {
+
+//    if(!panel->allocation_set) {
       wl_list_for_each(launcher, &panel->launcher_list, link) {
-        //if( (_count >= count - 8) && (_count < count - 4) ) {
+
         if(launcher->offset_right) {
           widget_get_allocation(launcher->widget, &allocation);
           launcher->force_x = panel->clock_allocation.x - 20 - allocation.width * _count2;
@@ -996,10 +1049,13 @@ panel_resize_handler(struct widget *widget,
 
           _count2--;
         }
-        _count++;
       }
-    }
+  //  }
+
+
   }
+
+  printf("_count2 is %d 1 \n", _count2);
   panel->allocation_set = 1;
 }
 
@@ -1097,6 +1153,7 @@ panel_create(struct desktop *desktop, struct output *output)
 	panel = xzalloc(sizeof *panel);
 
 	panel->owner = output;
+	panel->desktop = desktop;
 	panel->base.configure = panel_configure;
 	panel->window = window_create_custom(desktop->display);
 	panel->widget = window_add_widget(panel->window, panel);
@@ -1126,6 +1183,7 @@ panel_create(struct desktop *desktop, struct output *output)
 	if (panel->clock_format != CLOCK_FORMAT_NONE) {
     panel->clock_state = CLOCK_SHOWN;
 		panel_add_clock(panel);
+
     if(global_battery_exists)
 		  panel_add_battery(panel);
   }
@@ -1446,15 +1504,19 @@ load_icon_svg_or_fallback(const char *icon)
 	return surface;
 }
 
-static struct panel_launcher *panel_add_launcher(struct panel *panel, const char *icon,
-   const char *path, int initial_x, void (*function)(struct panel_launcher *widget)
-    )
+static struct panel_launcher *panel_add_launcher(struct panel *panel,
+   const char *icon,
+   const char *path, int initial_x,
+   void (*function)(struct panel_launcher *widget)
+   )
 {
 	struct panel_launcher *launcher;
 	char *start, *p, *eq, **ps;
 	int i, j, k;
 
 	launcher = xzalloc(sizeof *launcher);
+
+	launcher->panel = panel;
 
   if (strstr(icon, ".png") != NULL) {
 	  launcher->icon = load_icon_or_fallback(icon);
@@ -1480,6 +1542,7 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
     //move special launchers to the right
     if(!launcher->initial_x)
       launcher->offset_right = 1;
+
   }
 
 
@@ -1525,6 +1588,8 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel, const char
 	*ps = NULL;
 	ps = wl_array_add(&launcher->argv, sizeof *ps);
 	*ps = NULL;
+
+
 
 	launcher->panel = panel;
 	wl_list_insert(panel->launcher_list.prev, &launcher->link);
@@ -1999,6 +2064,13 @@ unlock_dialog_finish(struct task *task, uint32_t events)
 	weston_desktop_shell_unlock(desktop->shell);
 	unlock_dialog_destroy(desktop->unlock_dialog);
 	desktop->unlock_dialog = NULL;
+
+	shell_helper_set_panel (desktop->helper, desktop->panel->wl_surface);
+  shell_helper_move_surface (desktop->helper,
+    desktop->panel->wl_surface,
+    WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
+  );
+	printf("Unlocked \n");
 }
 
 static void
@@ -2292,9 +2364,6 @@ output_init(struct output *output, struct desktop *desktop)
     //Set panel initial position
     if(!output->panel->wl_surface)
       exit(1);
-    printf("3 \n");
-
-
 
     printf("4 \n");
 
@@ -2425,6 +2494,8 @@ void wayland_pointer_leave_cb(void *data,
       launch_volume(global_desktop->panel->volumeup_launcher);
     } else if(global_desktop->panel->clock_state == SYSTEM_SHOWN) {
       launch_system(global_desktop->panel->volumeup_launcher);
+    } else if(global_desktop->panel->clock_state == BRIGHTNESS_SHOWN) {
+      launch_brightness(global_desktop->panel->brightnessup_launcher);
     }
 
     window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
@@ -2442,11 +2513,6 @@ void wayland_pointer_motion_cb(void *data,
   }
 
 }
-
-
-
-
-
 
 void wayland_pointer_button_cb(void *data,
 		struct wl_pointer *pointer, uint32_t serial, uint32_t time, uint32_t button,
@@ -2691,6 +2757,7 @@ error:
 void check_battery_exists() {
 
   #if 0
+
   //TESTING
   global_battery_exists = 1;
   sprintf(global_battery_path, "/sys/class/power_supply/BAT0/capacity");
@@ -2851,9 +2918,7 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
     padding_right = 15;
   }
 
-  allocation.x = battery->panel->clock_allocation.x - WAYWARD_BATTERY_X - padding_right;
-
-
+  allocation.x = battery->panel->clock_allocation.x - battery->panel->desktop->right_icons * WAYWARD_BATTERY_X - padding_right;
 	allocation.y = WAYWARD_BATTERY_Y;
 
 	cairo_show_text(cr, string);
@@ -2920,38 +2985,31 @@ static void launch_system(struct panel_launcher *launcher) {
   struct rectangle widget_allocation;
 	cairo_t *cr;
 
-
   if(launcher->panel->clock_state == VOLUME_SHOWN) {
     launch_volume(launcher);
+	} else if(launcher->panel->clock_state == BRIGHTNESS_SHOWN) {
+    launch_brightness(launcher);
 	}
 
 	widget_get_allocation(launcher->panel->reboot_launcher->widget, &widget_allocation);
 
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
-    launcher->panel->clock->force_x = WAYWARD_HIDE_X;
     launcher->panel->reboot_launcher->force_x = launcher->panel->clock_allocation.x;
     launcher->panel->shutdown_launcher->force_x = launcher->panel->clock_allocation.x + 48;
+
     launcher->panel->reboot_launcher->initial_x = launcher->panel->clock_allocation.x;
     launcher->panel->shutdown_launcher->initial_x = launcher->panel->clock_allocation.x + 48;
     launcher->panel->clock_state = SYSTEM_SHOWN;
+
+    clock_hide(launcher->panel->clock);
 
 	} else {
     launcher->panel->clock->force_x = 0;
     launcher->panel->reboot_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->shutdown_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->clock_state = CLOCK_SHOWN;
-
+    printf("Hiding system \n");
   }
-
-
-
-  widget_set_allocation(launcher->panel->clock->widget,
-    launcher->panel->clock->force_x,
-    launcher->panel->clock_allocation.y,
-		launcher->panel->clock_allocation.width,
-    launcher->panel->clock_allocation.height
-  );
-
 
   widget_set_allocation(launcher->panel->reboot_launcher->widget,
     launcher->panel->reboot_launcher->force_x,
@@ -2967,18 +3025,53 @@ static void launch_system(struct panel_launcher *launcher) {
     widget_allocation.height
   );
 
-
+  //TODO
+  launcher->panel->painted = 0;
   widget_schedule_redraw(launcher->panel->reboot_launcher->widget);
   widget_schedule_redraw(launcher->panel->shutdown_launcher->widget);
   widget_schedule_redraw(launcher->panel->clock->widget);
   window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
 }
 
+static void panel_brightness_label_redraw_handler(struct widget *widget, void *data) {
+
+	cairo_t *cr;
+	struct rectangle allocation;
+	cairo_text_extents_t extents;
+	char string[7];
+  struct panel_label *label = data;
+
+  if(label->panel->clock_state != BRIGHTNESS_SHOWN)
+    return;
+
+	sprintf(string, "%d", label->panel->desktop->current_brightness);
+
+  label->panel->painted = 0;
+	cr = widget_cairo_create(label->panel->widget);
+	cairo_set_font_size(cr, 20);
+
+  cairo_select_font_face (cr, "Droid Sans",
+				CAIRO_FONT_SLANT_NORMAL,
+				CAIRO_FONT_WEIGHT_NORMAL);
+
+	cairo_text_extents(cr, string, &extents);
+
+  allocation.x = label->panel->clock_allocation.x;
+  allocation.y = 31;
+
+  if(label->force_x)
+    allocation.x = label->force_x;
+
+	printf("Brightness label drawn annotation x y %d \n", allocation.x, allocation.y);
+
+	cairo_move_to(cr, allocation.x, 31);
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_show_text(cr, string);
+	cairo_destroy(cr);
+
+}
 
 static void panel_volume_label_redraw_handler(struct widget *widget, void *data) {
-
-
-
 
 	cairo_t *cr;
 	struct rectangle allocation;
@@ -3033,7 +3126,7 @@ static struct panel_label *panel_add_volume_label(struct panel *panel)
   return label;
 }
 
-static void launch_volume(struct panel_launcher *launcher) {
+static void launch_brightness(struct panel_launcher *launcher) {
 
   struct rectangle allocation;
   struct rectangle widget_allocation;
@@ -3042,23 +3135,100 @@ static void launch_volume(struct panel_launcher *launcher) {
 
 	widget_get_allocation(launcher->panel->reboot_launcher->widget, &widget_allocation);
 
+	 printf("Brightness shown 0 %d \n", launcher->panel->desktop->current_brightness);
+
   if(launcher->panel->clock_state == SYSTEM_SHOWN) {
     launch_system(launcher);
+	} else if(launcher->panel->clock_state == VOLUME_SHOWN) {
+    launch_volume(launcher);
 	}
+
+
+
+  if(launcher->panel->clock_state == CLOCK_SHOWN) {
+
+
+
+    if(launcher->panel->desktop->current_brightness == 100) {
+      label_padding = 41;
+    }
+
+    printf("Brightness shown 1 %d \n", launcher->panel->desktop->current_brightness);
+
+    clock_hide(launcher->panel->clock);
+    launcher->panel->brightnessdown_launcher->force_x = launcher->panel->clock_allocation.x;
+    launcher->panel->brightnessup_launcher->force_x = launcher->panel->clock_allocation.x + 84;
+    launcher->panel->brightnessdown_launcher->initial_x = launcher->panel->clock_allocation.x;
+    launcher->panel->brightnessup_launcher->initial_x = launcher->panel->clock_allocation.x + 84;
+    //brightness label
+    launcher->panel->brightness_label->force_x = launcher->panel->clock_allocation.x + label_padding;
+    launcher->panel->clock_state = BRIGHTNESS_SHOWN;
+
+	} else {
+    launcher->panel->clock->force_x = 0;
+    launcher->panel->brightnessdown_launcher->force_x = WAYWARD_HIDE_X;
+    launcher->panel->brightnessup_launcher->force_x = WAYWARD_HIDE_X;
+    launcher->panel->brightness_label->force_x = WAYWARD_HIDE_X;
+    launcher->panel->clock_state = CLOCK_SHOWN;
+  }
+
+  widget_set_allocation(launcher->panel->brightnessdown_launcher->widget,
+    launcher->panel->brightnessdown_launcher->force_x,
+    widget_allocation.y,
+		widget_allocation.width,
+    widget_allocation.height
+  );
+
+  widget_set_allocation(launcher->panel->brightnessup_launcher->widget,
+    launcher->panel->brightnessup_launcher->force_x,
+    widget_allocation.y,
+		widget_allocation.width,
+    widget_allocation.height
+  );
+
+  widget_set_allocation(launcher->panel->brightness_label->widget,
+    launcher->panel->brightness_label->force_x,
+    widget_allocation.y,
+		40,
+    50
+  );
+
+  widget_schedule_redraw(launcher->panel->brightnessdown_launcher->widget);
+  widget_schedule_redraw(launcher->panel->brightnessup_launcher->widget);
+  widget_schedule_redraw(launcher->panel->brightness_label->widget);
+
+  widget_schedule_redraw(launcher->panel->clock->widget);
+  window_schedule_resize(launcher->panel->window, global_desktop_width, 50);
+}
+
+static void launch_volume(struct panel_launcher *launcher) {
+
+  struct rectangle allocation;
+  struct rectangle widget_allocation;
+	cairo_t *cr;
+  int label_padding = 45;
+
+	widget_get_allocation(launcher->panel->volumeup_launcher->widget, &widget_allocation);
+
+  if(launcher->panel->clock_state == SYSTEM_SHOWN) {
+    launch_system(launcher);
+	} else if(launcher->panel->clock_state == BRIGHTNESS_SHOWN) {
+    launch_brightness(launcher);
+	}
+
 
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
     if(global_desktop->current_volume_percentage == 100) {
       label_padding = 41;
     }
-    printf("Volume Clock shown \n");
-    launcher->panel->clock->force_x = WAYWARD_HIDE_X;
+
+    clock_hide(launcher->panel->clock);
     launcher->panel->volumedown_launcher->force_x = launcher->panel->clock_allocation.x;
     launcher->panel->volumeup_launcher->force_x = launcher->panel->clock_allocation.x + 84;
     launcher->panel->volumedown_launcher->initial_x = launcher->panel->clock_allocation.x;
     launcher->panel->volumeup_launcher->initial_x = launcher->panel->clock_allocation.x + 84;
     //volume label
     launcher->panel->volume_label->force_x = launcher->panel->clock_allocation.x + label_padding;
-
     launcher->panel->clock_state = VOLUME_SHOWN;
 
 	} else {
@@ -3067,15 +3237,10 @@ static void launch_volume(struct panel_launcher *launcher) {
     launcher->panel->volumeup_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->volume_label->force_x = WAYWARD_HIDE_X;
     launcher->panel->clock_state = CLOCK_SHOWN;
+
+    printf("Hiding volume \n");
+
   }
-
-  widget_set_allocation(launcher->panel->clock->widget,
-    launcher->panel->clock->force_x,
-    launcher->panel->clock_allocation.y,
-		launcher->panel->clock_allocation.width,
-    launcher->panel->clock_allocation.height
-  );
-
 
   widget_set_allocation(launcher->panel->volumedown_launcher->widget,
     launcher->panel->volumedown_launcher->force_x,
@@ -3090,6 +3255,8 @@ static void launch_volume(struct panel_launcher *launcher) {
 		widget_allocation.width,
     widget_allocation.height
   );
+
+
 
   widget_set_allocation(launcher->panel->volume_label->widget,
     launcher->panel->volume_label->force_x,
@@ -3196,8 +3363,11 @@ clock_restart ()
   execl ("/usr/bin/sudo", "/usr/bin/sudo", "/usr/bin/systemctl", "reboot", (char *)0);
 }
 
-static void brightnessctl (int dir) {
-  printf("Brightness up %d  \n", dir);
+
+static void set_brightness_ctl (int brightness, char *brightnessctl_device ) {
+  char c[7];
+  char dev[70];
+
   pid_t pid;
   pid = fork();
 	if (pid < 0) {
@@ -3208,31 +3378,135 @@ static void brightnessctl (int dir) {
 	if (pid)
 		return;
 
+	if (setsid() == -1)
+		exit(EXIT_FAILURE);
+
+
+  sprintf(c, "%d%%", brightness);
+  sprintf(dev, "--device=%s", brightnessctl_device);
+
+  char *newargv[] = { "/usr/bin/brightnessctl", "s", c, dev, "", NULL };
+  execve(newargv[0], newargv, environ);
+
+}
+
+static void set_brightness_ddc (int brightness, int ddc_i2c_number) {
+  char c[7];
+  char dev[70];
+
+  pid_t pid;
+  pid = fork();
+	if (pid < 0) {
+	  fprintf(stderr, "fork failed: %s\n", strerror(errno));
+	  return;
+	}
+
+	if (pid)
+		return;
+
+  if (setsid() == -1) {
+	  printf("ddcontrol failed \n");
+		return;
+	}
+
+  sprintf(c, "-w %d", brightness);
+  sprintf(dev, "dev:/dev/i2c-%d", ddc_i2c_number);
+  execl ("/usr/bin/ddccontrol", "/usr/bin/ddccontrol", "-r 0x10", c, dev, (char *)0);
+  return;
+
+    //  char *newargv[] = { "/usr/bin/ddccontrol", " -r 0x10 -w 12 dev:/dev/i2c-3", NULL };
+//  execve(newargv[0], newargv, environ);
+
+}
+static void brightness_up (struct panel_launcher *launcher) {
+ int brightness = launcher->panel->desktop->current_brightness + 5;
+  if(brightness > 100)
+    brightness = 100;
+
+ if(brightness == launcher->panel->desktop->current_brightness)
+   return;
+
+ printf("Brightness up %d  \n", launcher->panel->desktop->current_brightness);
+
+ if(launcher->panel->desktop->enable_brightness_ddc)
+   set_brightness_ddc (brightness, launcher->panel->desktop->ddc_i2c_number);
+ else
+   set_brightness_ctl (brightness, launcher->panel->desktop->brightnessctl_device);
+
+ launcher->panel->desktop->current_brightness = brightness;
+
+}
+
+static void brightness_down (struct panel_launcher *launcher) {
+ int brightness = launcher->panel->desktop->current_brightness - 5;
+ if(brightness < 0)
+   brightness = 0;
+
+ if(brightness == launcher->panel->desktop->current_brightness)
+   return;
+
+ if(launcher->panel->desktop->enable_brightness_ddc)
+   set_brightness_ddc (brightness, launcher->panel->desktop->ddc_i2c_number);
+ else
+   set_brightness_ctl (brightness, launcher->panel->desktop->brightnessctl_device);
+
+ launcher->panel->desktop->current_brightness = brightness;
+ printf("Brightness down %d  \n", brightness);
+
+}
+
+//Keyboard brightnessctl
+static void brightnessctl (int dir) {
+  char c[7];
+  char dev[70];
+  int brightness = global_desktop->current_brightness;
+
+  if(!global_desktop->enable_brightness_ctl)
+    return;
+
+  if(dir != 1) {
+    brightness = brightness - 5;
+    if(brightness < 0)
+       brightness = 0;
+  } else {
+    brightness = brightness + 5;
+    if(brightness > 100)
+      brightness = 100;
+  }
+  (*global_desktop).current_brightness = brightness;
+
+  pid_t pid;
+  pid = fork();
+	if (pid < 0) {
+		fprintf(stderr, "fork failed: %s\n", strerror(errno));
+		return;
+	}
+
+	if (pid)
+		return;
 
 	if (setsid() == -1)
 		exit(EXIT_FAILURE);
 
 
+  printf("Brightness set to %d 0  \n", brightness);
+  sprintf(c, "%d%%", brightness);
+  sprintf(dev, "");
 
-//	char *argv[] = {"/usr/bin/brightnessctl", "s", "5+", " > /tmp/d1", NULL};
-//    posix_spawn(&pid, "/usr/bin/brightnessctl", NULL, NULL, argv, environ);
+  if(global_desktop->brightnessctl_device)
+    sprintf(dev, "--device=%s", global_desktop->brightnessctl_device);
 
-//  return;
 
-  if(dir > 0) {
-    char *newargv[] = { "/usr/bin/brightnessctl", "s", "5%+", "", NULL };
-    execve(newargv[0], newargv, environ);
-  } else {
-    char *newargv[] = { "/usr/bin/brightnessctl", "s", "5%-", "", NULL };
-    execve(newargv[0], newargv, environ);
-  }
+
+
+  execl ("/usr/bin/brightnessctl", "/usr/bin/brightnessctl", "s", c, dev, (char *)0);
+  //char *newargv[] = { "/usr/bin/brightnessctl", "s", c, dev, "", NULL };
+  //execve(newargv[0], newargv, environ);
+
 }
-
-
 
 static void check_shm_commands(struct toytimer *tt) {
   char name[70];
-
 
   static int shm_init = 0;
   static void *ptr = NULL;
@@ -3294,6 +3568,112 @@ static void check_shm_commands(struct toytimer *tt) {
 
 //TODO add launchers with icons
 //TODO add svg
+static int wayward_add_brightness(struct panel *panel, struct desktop *desktop)
+{
+  int brightness = 0;
+  char *icon = NULL;
+  char *path = NULL;
+  char *line = NULL;
+  char *hide_apps = NULL;
+  char *hide_apps_token, *hide_apps_str, *hide_apps_tofree;
+  struct panel_label *label = NULL;
+  char path_buf[1256];
+  char ddc_buf[128];
+  char ctl_buf[256];
+
+  printf("Adding brightness %d \n", desktop->enable_brightness_ddc);
+
+  //Run script to get brightness
+  //TODO use C instead
+  if(desktop->enable_brightness_ddc && desktop->ddc_i2c_number
+    && desktop->ddc_i2c_number < 30
+  ) {
+
+    snprintf(ddc_buf, sizeof ddc_buf, "/usr/bin/bash /usr/lib/weston/wayward-get-brightness-ddc %d",
+      desktop->ddc_i2c_number);
+
+    if( system ( ddc_buf ) ) {
+      printf("Brightness ddcontrol. error occured %s \n", strerror(errno));
+      return -1;
+    }
+  } else if (desktop->enable_brightness_ctl &&
+    desktop->brightnessctl_device
+  ) {
+
+  snprintf(ctl_buf, sizeof ctl_buf, "/usr/bin/bash /usr/lib/weston/wayward-get-brightness-ctl %s",
+      desktop->brightnessctl_device);
+
+    if(system ( ctl_buf )) {
+      printf("Brightnessctl. error occured %s \n", strerror(errno));
+      return -1;
+    }
+  } else {
+    return -1;
+  }
+
+  snprintf(path_buf, sizeof path_buf, "%s/.cache/wayward-brightness", getenv("HOME"));
+
+  FILE* file = fopen(path_buf, "r");
+  if(!file) {
+    return -1;
+  }
+
+  fscanf (file, "%d", &brightness);
+  while (!feof (file))
+  {
+    printf ("%d ", brightness);
+    fscanf (file, "%d", &brightness);
+  }
+  fclose (file);
+
+  if(brightness > 100 || brightness < 0) {
+    return -1;
+  }
+
+  panel_add_launcher(panel,
+   "/usr/share/wayward/display-brightness-symbolic.svg",
+    "",
+    0,
+    launch_brightness
+  );
+
+	label = xzalloc(sizeof *label);
+	label->force_x = 0;
+	label->panel = panel;
+	label->widget = widget_add_widget(panel->widget, label);
+	widget_set_redraw_handler(label->widget, panel_brightness_label_redraw_handler);
+	panel->brightness_label = label;
+
+  //Add plus/minus buttons
+  panel->brightnessdown_launcher = panel_add_launcher(panel,
+		"/usr/share/wayward/list-remove-symbolic.svg",
+    "",
+    WAYWARD_HIDE_X,
+    brightness_down
+  );
+  panel->brightnessup_launcher = panel_add_launcher(panel,
+		"/usr/share/wayward/list-add-symbolic.svg",
+    "",
+    WAYWARD_HIDE_X,
+    brightness_up
+  );
+
+
+
+  panel->brightnessdown_launcher->force_x = WAYWARD_HIDE_X;
+  panel->brightnessup_launcher->force_x = WAYWARD_HIDE_X;
+  panel->brightness_label->force_x = WAYWARD_HIDE_X;
+  widget_schedule_redraw(panel->brightnessdown_launcher->widget);
+  widget_schedule_redraw(panel->brightnessup_launcher->widget);
+  widget_schedule_redraw(panel->brightness_label->widget);
+
+  printf("Adding brightness %d \n", brightness);
+  return brightness;
+}
+
+
+//TODO add launchers with icons
+//TODO add svg
 static int wayward_add_launchers(struct panel *panel, struct desktop *desktop)
 {
 
@@ -3303,11 +3683,22 @@ static int wayward_add_launchers(struct panel *panel, struct desktop *desktop)
   char *line = NULL;
   char *hide_apps = NULL;
   char *hide_apps_token, *hide_apps_str, *hide_apps_tofree;
+  bool hide_all_apps = false;
 
   size_t len = 0;
   ssize_t read;
 
   struct weston_config_section *s;
+
+  s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+
+  weston_config_section_get_bool(s, "hide-all-apps", &hide_all_apps, false);
+
+  //Disable adding apps from /usr/share/local/applications
+  if(hide_all_apps)
+    return 0;
+
+
   s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
   weston_config_section_get_string(s, "hide-apps", &hide_apps, NULL);
 
@@ -3432,9 +3823,25 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   struct rectangle clock_allocation;
   struct rectangle launcher_allocation;
 
+  bool disable_sound_icons = false;
+  struct panel_label *label = NULL;
 
 
+	s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+	weston_config_section_get_bool(s, "disable-sound-icons", &disable_sound_icons, false);
 
+
+	s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+	weston_config_section_get_bool(s, "enable-brightness-ddc", &desktop->enable_brightness_ddc, false);
+
+	s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+	weston_config_section_get_int(s, "ddc-i2c-number", &desktop->ddc_i2c_number, 0);
+
+	s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+	weston_config_section_get_bool(s, "enable-brightness-ctl", &desktop->enable_brightness_ctl, false);
+
+	s = weston_config_get_section(desktop->config, "shell", NULL, NULL);
+	weston_config_section_get_string(s, "brightnessctl-device", &desktop->brightnessctl_device, false);
 
 
 	count = 0;
@@ -3460,7 +3867,6 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   //Add launchers from /usr/share/applications
   shared_launchers = wayward_add_launchers(panel, desktop);
 
-
 	if (shared_launchers == 0 && count == 0) {
 		/* add default launcher */
 		panel_add_launcher(panel,
@@ -3478,60 +3884,63 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   //Action launchers
   panel_add_launcher(panel,
 		"/usr/share/wayward/tv-symbolic.svg",
-    BINDIR "/weston-terminal",
+    "",
     0,
     toggle_inhibit
   );
 
   panel_add_launcher(panel,
 		"/usr/share/wayward/open-menu-symbolic.svg",
-    BINDIR "/weston-terminal",
+    "",
     0,
     launch_exposay
   );
 
   panel_add_launcher(panel,
 		"/usr/share/wayward/emblem-system-symbolic.svg",
-    BINDIR "/weston-terminal",
+    "",
     0,
     launch_system
   );
 
 
-  if(global_desktop->mixer_handle != NULL) {
+  //Add brightness
+  desktop->current_brightness = wayward_add_brightness(panel, desktop);
+
+  if(desktop->mixer_handle != NULL && !disable_sound_icons) {
     panel_add_launcher(panel,
      "/usr/share/wayward/multimedia-volume-control-symbolic.svg",
-      BINDIR "/weston-terminal",
+      "",
       0,
       launch_volume
     );
   }
 
   //Add Restart button for system section
-
   panel->reboot_launcher = panel_add_launcher(panel,
 		"/usr/share/wayward/system-reboot-symbolic.svg",
-    BINDIR "/weston-terminal",
+    "",
     WAYWARD_HIDE_X,
     clock_restart
   );
 
 
+
+
   //Add Shutdown button
   panel->shutdown_launcher = panel_add_launcher(panel,
 		"/usr/share/wayward/system-shutdown-symbolic.svg",
-    BINDIR "/weston-terminal",
+    "",
     WAYWARD_HIDE_X,
     clock_shutdown
   );
 
-
   panel->reboot_launcher->force_x = WAYWARD_HIDE_X;
   panel->shutdown_launcher->force_x = WAYWARD_HIDE_X;
-  widget_schedule_redraw(panel->reboot_launcher->widget);
-  widget_schedule_redraw(panel->shutdown_launcher->widget);
 
-  if(!global_desktop->mixer_handle)
+
+
+  if(!global_desktop->mixer_handle || disable_sound_icons)
     return;
 
   //Add plus/minus button

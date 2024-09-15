@@ -54,20 +54,6 @@
 
 #define DEFAULT_SCALE 1.3
 
-
-enum animation_type {
-	ANIMATION_NONE,
-	ANIMATION_ZOOM,
-	ANIMATION_FADE,
-	ANIMATION_DIM_LAYER,
-};
-
-enum fade_type {
-	FADE_IN,
-	FADE_OUT
-};
-
-
 enum exposay_target_state {
 	EXPOSAY_TARGET_OVERVIEW, /* show all windows */
 	EXPOSAY_TARGET_CANCEL, /* return to normal, same focus */
@@ -154,11 +140,30 @@ struct exposay {
 struct exposay_output global_eoutput;
 struct exposay global_exposay = {0};
 
+static void exposay_set_state(struct desktop_shell *shell,
+                              enum exposay_target_state state,
+			      struct weston_seat *seat);
+static void exposay_check_state(struct desktop_shell *shell, struct weston_seat *seat);
+static void exposay_remove_mask();
+
+//Copied from desktop-shell/shell.h
+
 
 struct focus_surface {
-	struct weston_surface *surface;
-	struct weston_view *view;
-	struct weston_transform workspace_transform;
+	struct weston_curtain *curtain;
+};
+
+enum animation_type {
+	ANIMATION_NONE,
+
+	ANIMATION_ZOOM,
+	ANIMATION_FADE,
+	ANIMATION_DIM_LAYER,
+};
+
+enum fade_type {
+	FADE_IN,
+	FADE_OUT
 };
 
 struct workspace {
@@ -171,18 +176,6 @@ struct workspace {
 	struct focus_surface *fsurf_back;
 	struct weston_view_animation *focus_animation;
 };
-
-
-
-
-
-
-static void exposay_set_state(struct desktop_shell *shell,
-                              enum exposay_target_state state,
-			      struct weston_seat *seat);
-static void exposay_check_state(struct desktop_shell *shell, struct weston_seat *seat);
-static void exposay_remove_mask();
-
 
 struct shell_output {
 	struct desktop_shell  *shell;
@@ -201,7 +194,6 @@ struct shell_output {
 };
 
 struct weston_desktop;
-
 struct desktop_shell {
 	struct weston_compositor *compositor;
 	struct weston_desktop *desktop;
@@ -215,6 +207,7 @@ struct desktop_shell {
 	struct wl_listener show_input_panel_listener;
 	struct wl_listener hide_input_panel_listener;
 	struct wl_listener update_input_panel_listener;
+	struct wl_listener session_listener;
 
 	struct weston_layer fullscreen_layer;
 	struct weston_layer panel_layer;
@@ -286,6 +279,7 @@ struct desktop_shell {
 	struct timespec startup_time;
 };
 
+
 //struct weston_output *
 //get_default_output(struct weston_compositor *compositor);
 
@@ -315,6 +309,16 @@ get_default_output(struct weston_compositor *compositor)
 			    struct weston_output, link);
 }
 
+
+static void
+weston_layer_entry_remove(struct weston_layer_entry *entry)
+{
+	wl_list_remove(&entry->link);
+	wl_list_init(&entry->link);
+	entry->layer = NULL;
+}
+
+
 struct weston_view *
 get_default_view(struct weston_surface *surface);
 
@@ -337,15 +341,12 @@ shell_for_each_layer(struct desktop_shell *shell,
 		     shell_for_each_layer_func_t func,
 void *data);
 
-
 struct wl_seat *panel_seat;
-struct weston_seat *global_weston_seat;
-struct weston_keyboard *panel_keyboard;
-
-
+struct weston_seat *global_weston_seat = NULL;
+struct weston_keyboard *panel_keyboard = NULL;
 struct desktop_shell *global_desktop_shell = NULL;
-struct wl_array global_minimized_array;
-struct wl_array global_exposay_views_array;
+struct wl_array global_minimized_array = {0};
+struct wl_array global_exposay_views_array = {0};
 
 struct shell_helper {
 	struct weston_compositor *compositor;
@@ -353,12 +354,10 @@ struct shell_helper {
 	struct wl_listener destroy_listener;
   struct exposay_output eoutput;
 	struct weston_layer *panel_layer;
-
 	struct weston_layer curtain_layer;
 	struct weston_view *curtain_view;
 	struct weston_view_animation *curtain_animation;
 	uint32_t curtain_show;
-
 	struct wl_list slide_list;
 };
 
@@ -386,6 +385,11 @@ shell_helper_move_surface(struct wl_client *client,
 
   weston_log("Moving..  %d %d \n", x, y);
 
+  if (!weston_surface_is_mapped(surface)) {
+    weston_log("Surface unmapped \n", x, y);
+    return;
+  }
+
   if(x == -13371)
     x = view->geometry.pos_offset.x;
 
@@ -399,7 +403,6 @@ shell_helper_move_surface(struct wl_client *client,
   } else {
   	pos.c = weston_coord(x, y);
   }
-
 
 	weston_view_set_position(view, pos);
 	weston_view_update_transform(view);
@@ -416,7 +419,9 @@ configure_surface(struct weston_surface *es, struct weston_coord_surface new_ori
 
 	if (wl_list_empty(&new_view->layer_link.link)) {
 		/* be sure to append to the list, not insert */
-		weston_layer_entry_insert(&existing_view->layer_link, &new_view->layer_link);
+//		weston_layer_entry_insert(&existing_view->layer_link, &new_view->layer_link);
+
+		weston_view_move_to_layer(new_view, &existing_view->layer_link);
 		weston_compositor_schedule_repaint(es->compositor);
 	}
 }
@@ -514,18 +519,24 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
   struct weston_coord_global pos;
 
 	if (!weston_surface_is_mapped(es)) {
-	  weston_log("Moving panel configure .. \n");
+	  weston_log("Moving panel configure .. \n", es->height);
 		weston_surface_map(es);
+
+	  weston_log("Mapping panel configure 333 .. \n", es->height);
 		assert(wl_list_empty(&es->views));
 		view = weston_view_create(es);
 		assert(view);
+		weston_log("Moving panel configure 444 %d .. \n", es->height);
+		initial = 0;
 	}
 
-	weston_view_move_to_layer(view,
-				  &shell->panel_layer.view_list);
+  if (wl_list_empty(&view->layer_link.link)) {
+	 weston_view_move_to_layer(view, &shell->panel_layer.view_list);
+	}
 
   if(!initial) {
     initial = 1;
+    weston_log("Moving panel configure - initial .. \n");
     panel_move_initial(view, 0, output->height - es->height);
   }
 
@@ -562,8 +573,7 @@ shell_helper_set_panel(struct wl_client *client,
 					   view_list.link);
 */
 
-	/* set new configure functions that only ensure the surface is in the
-	 * correct layer. */
+	// set new configure functions
 	surface->committed = configure_panel;
 	//surface->committed_private = helper;
 }
@@ -866,11 +876,6 @@ void fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec 
   printf(" /width %f \n", (float)((float)view->output->width/(float)view->surface->width));
 	printf(" /height %f \n", (float)((float)view->output->height / (float)view->surface->height));
 
-		//if (!get_shell_surface(view->surface))
-		//	continue;
-		//if (view->output != output)
-	  //		continue;
-
 	esurface = malloc(sizeof(*esurface));
   esurface->shell = shell;
   esurface->view = view;
@@ -897,16 +902,12 @@ void fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec 
 
   return;
 
-
-
   //TODO figure out why below is not working???
   wl_list_for_each(view, &workspace->layer.view_list.link, layer_link.link) {
 
-    wl_list_init(&transform.link);
-    weston_matrix_init(&transform.matrix);
-    wl_list_insert(&view->geometry.transformation_list, &transform.link);
-
-  //wl_list_remove(&transform.link);
+  wl_list_init(&transform.link);
+  weston_matrix_init(&transform.matrix);
+  wl_list_insert(&view->geometry.transformation_list, &transform.link);
 
 	//weston_matrix_scale(&transform.matrix, surface->output->width / surface->width, 				    surface->output->height / surface->height, 1);
 	//weston_matrix_scale(matrix, 0.5, 0.5, 1.0);
@@ -982,12 +983,9 @@ shell_helper_bind_key_panel(struct wl_client *client,
   weston_compositor_add_key_binding(helper->compositor, KEY_MUTE, 0, mute_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEDOWN , 0, volumedown_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEUP , 0, volumeup_binding, shell);
-
   weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSUP, 0, brightnessup_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSDOWN, 0, brightnessdown_binding, shell);
-
-
-
+//////
   weston_compositor_add_key_binding(helper->compositor, KEY_S , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, shutdown_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_R , MODIFIER_SUPER | MODIFIER_CTRL | MODIFIER_ALT, restart_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_T , MODIFIER_SUPER | MODIFIER_SHIFT, terminal_binding, shell);
@@ -1204,8 +1202,10 @@ shell_curtain_create_view(struct shell_helper *helper,
   pos.c = weston_coord(0, 0);
 	weston_view_set_position(view, pos);
 //	weston_surface_set_color(surface, 0.0, 0.0, 0.0, 0.7);
-	weston_layer_entry_insert(&helper->curtain_layer.view_list,
-				  &view->layer_link);
+//	weston_layer_entry_insert(&helper->curtain_layer.view_list,
+//				  &view->layer_link);
+  weston_view_move_to_layer(view, &helper->curtain_layer.view_list);
+
 	pixman_region32_init_rect(&surface->input, 0, 0,
 	                          surface->width,
 	                          surface->height);
@@ -1360,8 +1360,9 @@ shell_helper_move_background_surface(
 				     struct weston_view,
 				     surface_link);
 
-  //weston_layer_entry_remove(&existing_view->layer_link);
-  weston_layer_entry_insert(&shell->background_layer.view_list, &existing_view->layer_link);
+
+//  weston_layer_entry_insert(&shell->background_layer.view_list, &existing_view->layer_link);
+  weston_view_move_to_layer(existing_view, &shell->background_layer.view_list);
 	weston_compositor_schedule_repaint(shell->compositor);
   return;
 
@@ -1384,7 +1385,6 @@ shell_helper_move_background_surface(
 
 
 }
-
 
 static const struct shell_helper_interface helper_implementation = {
 	shell_helper_move_surface,
@@ -1450,7 +1450,7 @@ static void setup_shm(int shm_command) {
   int test = shm_command;
   memcpy((int*)ptr, &test, sizeof(int));
 
-  memcpy(&test, (int *)ptr, sizeof(int));
+  //memcpy(&test, (int *)ptr, sizeof(int));
 
   weston_log("SHM is %d \n", test);
 }
@@ -1498,8 +1498,6 @@ wet_module_init(struct weston_compositor *ec,
   setup_shm(SHM_START);
 	return 0;
 }
-
-
 
 /** Begin exposay */
 #ifndef container_of
@@ -1593,7 +1591,8 @@ exposay_activate(struct desktop_shell *shell)
 
 	weston_view_geometry_dirty(esurface->view);
 	weston_layer_entry_remove(&esurface->view->layer_link);
-	weston_layer_entry_insert(new_layer_link, &esurface->view->layer_link);
+//	weston_layer_entry_insert(new_layer_link, &esurface->view->layer_link);
+  weston_view_move_to_layer(esurface->view, new_layer_link);
 	weston_view_geometry_dirty(esurface->view);
   weston_compositor_schedule_repaint(esurface->view->surface->compositor);
 
@@ -1770,8 +1769,6 @@ exposay_create_mask(struct desktop_shell *shell, int width) {
 	weston_view_move_to_layer(global_exposay.mask_view,
 				  &global_exposay.workspace->layer.view_list);
 
-//  weston_layer_entry_insert( &global_exposay.workspace->layer.view_list ,
-//    &global_exposay.mask_view->layer_link);
 
   //weston_compositor_schedule_repaint(shell->compositor);
 
@@ -1827,8 +1824,10 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output,
 		if (!is_shell_surface(view->surface))
 			continue;
 
-		if (view->output != output)
-			continue;
+    	if (view->output != output) {
+    	    printf("No output %p %p \n", view->output, output);
+    			continue;
+    	}
 
     add = wl_array_add(&global_exposay_views_array, sizeof *add);
     *add = view;
@@ -1836,12 +1835,23 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output,
 	}
 
   if(!hide_minimized) {
+
   	wl_list_for_each_safe(view, tmp, &shell->minimized_layer.view_list.link, layer_link.link) {
-    	if (view->output != output)
+
+      /* Broken since Weston 14.0
+        TODO Test
+      */
+      /*
+
+    	if (view->output != output) {
+    	    printf("No output %p %p \n", view->output, output);
     			continue;
+    	}
+    	*/
 
   		weston_layer_entry_remove(&view->layer_link);
-  		weston_layer_entry_insert(&workspace->layer.view_list, &view->layer_link);
+  		weston_view_move_to_layer(view, &workspace->layer.view_list);
+
 
   		add = wl_array_add(&global_minimized_array, sizeof *add);
   		*add = view;
@@ -1913,7 +1923,7 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output,
 	int last_row = 1;
 	wl_array_for_each(add, &global_exposay_views_array) {
 
-    view = *add;
+  view = *add;
 
 //		if (!is_shell_surface(view->surface))
 //			continue;
@@ -2343,8 +2353,6 @@ exposay_transition_active(struct desktop_shell *shell, int hide_minimized)
 		weston_pointer_clear_focus(pointer);
 	}
 
-
-
 	wl_list_for_each(shell_output, &shell->output_list, link) {
 		enum exposay_layout_state state;
 
@@ -2415,26 +2423,11 @@ exposay_set_state(struct desktop_shell *shell, enum exposay_target_state state,
 }
 
 
-/*
-
-static struct workspace *
-get_workspace(struct desktop_shell *shell, unsigned int index)
-{
-	struct workspace **pws = shell->workspaces.array.data;
-	assert(index < shell->workspaces.num);
-	pws += index;
-	return *pws;
-}
-
-*/
-
 struct workspace *
 get_current_workspace(struct desktop_shell *shell)
 {
   //Weston 11 removed workspaces
   return &shell->workspace;
-
-//	return get_workspace(shell, shell->workspaces.current);
 }
 
 
@@ -2468,7 +2461,9 @@ lower_fullscreen_layer(struct desktop_shell *shell,
     //only insert the actual surface
     //not the black view
     if (is_shell_surface(view->surface))
-		  weston_layer_entry_insert(&ws->layer.view_list, &view->layer_link);
+		  weston_view_move_to_layer(view, &ws->layer.view_list);
+//		  weston_layer_entry_insert(&ws->layer.view_list, &view->layer_link);
+
 
 		weston_view_damage_below(view);
 		weston_surface_damage(view->surface);

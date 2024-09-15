@@ -66,14 +66,46 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
 ## Hiding apps in the app panel
 
-Edit weston.ini and add hide-apps to the shell section. For example
+Edit weston.ini and add hide-apps to the shell section.
 
     hide-apps=mpv,zathura,file-roller
 
+## Hiding apps in the app panel
+
+To hide apps from /usr/share/applications edit weston.ini and add the following to the shell section.
+
+    hide-all-apps=true
+
+## Brightness control with ddccontrol
+
+Since 1.4.0 it is possible to control monitor brightness with ddccontrol.
+First install ddccontrol, and test to see if it is working with your monitor.
+Then add the following to weston.ini, where example is the number from /dev/i2c-number
+in the output of `ddccontrol -p`. Brightness can then be changed from the app panel.
+
+    enable-brightness-ddc=true
+    ddc-i2c-number=example
+
+This feature is currently limited to desktops with a single monitor.
+
+## Brightness control with brightnessctl
+
+Since 1.4.0 it is possible to control laptop brightness with brightnessctl.
+First install brightnessctl, and configure it to work with your laptop.
+Then add the following to weston.ini, where example is the laptop backlight device name from `brightnessctl info`
+
+    enable-brightness-ctl=true
+    brightnessctl-device=example
 
 ## Changing wallpaper
 
 Wallpapers are changed from weston.ini. See weston.ini documentation - https://www.mankier.com/5/weston.ini#Shell_Section-background-image
+
+## Hiding sound control
+
+To hide the sound control edit weston.ini and add the following to the shell section.
+
+    disable-sound-icons=true
 
 ## Pincodes
 
@@ -85,6 +117,8 @@ To set a pincode run as root wayward-set-pincode, and then restart weston. For e
 
 
 ## Changelog
+
+1.4.0 - Update to Weston 14.0. Add brightness control with ddcontrol or brightnessctl.
 
 1.3.0 - Update to Weston 13.0. Add red color option to the wayward-terminal. Add list of open apps without minimized apps.
 
@@ -114,7 +148,6 @@ To set a pincode run as root wayward-set-pincode, and then restart weston. For e
 ## Known issues and limitations
 
 * If there are large number of applications in /usr/share/applications, app icons will overlap with system icons. This can be fixed by hiding apps in weston.ini.
-* Misconfigured or broken audio such as AMD HDMI audio can cause crash on startup. As a workaround audio setup should be fixed. For example for AMD HDMI audio built-in soundcard can be used as a workaround - e.g by setting snd_hda_intel.index=1,0 if built in soundcard comes as second when running aplay -l
 * Multimonitor support - not tested after removal of GTK
 * Need to restart weston after a new app installation to see the new app icon in the panel.
 

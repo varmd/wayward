@@ -1,6 +1,6 @@
 pkgname=wayward
-pkgver=1.3.0
-pkgrel=2
+pkgver=1.4.0
+pkgrel=4
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"

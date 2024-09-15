@@ -89,6 +89,8 @@ typedef void *EGLContext;
 #define ZWP_POINTER_CONSTRAINTS_V1_VERSION 1
 
 #define DEFAULT_XCURSOR_SIZE 32
+#define WAYWARD_HIDE_X 43371
+
 
 struct shm_pool;
 
@@ -1631,6 +1633,8 @@ widget_find_widget(struct widget *widget, int32_t x, int32_t y)
 	alloc_y = widget->allocation.y;
 	width = widget->allocation.width;
 	height = widget->allocation.height;
+
+
 
 
 
@@ -5414,10 +5418,10 @@ menu_redraw_handler(struct widget *widget, void *data)
 	cairo_rectangle(cr, x, y, width, height);
 	cairo_fill(cr);
 
-	cairo_select_font_face(cr, "sans",
+	cairo_select_font_face(cr, "Droid Sans Mono",
 			       CAIRO_FONT_SLANT_NORMAL,
 			       CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, 12);
+	cairo_set_font_size(cr, 14);
 
 	for (i = 0; i < menu->count; i++) {
 		if (i == menu->current) {

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+stringContains() { [ -z "${2##*$1*}" ]; }
+
+if [[ -z "$1" ]]; then
+  echo "no brightnessctl device"
+  exit;
+fi
+
+OUT=`brightnessctl --device ${1} i 2>/dev/null`
+
+OUT=${OUT##*Current}
+
+OUT=${OUT##*\(}
+OUT=${OUT%\%*}
+
+BRIGHTNESS=$OUT
+
+printf $BRIGHTNESS > $HOME/.cache/wayward-brightness
+
+exit;
+

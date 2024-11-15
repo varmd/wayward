@@ -7,11 +7,18 @@ if [[ -z "$1" ]]; then
   exit;
 fi
 
-OUT=`ddccontrol -r 0x10 dev:/dev/i2c-${1} 2>/dev/null | grep -i Control  `
+#OUT=`ddccontrol -r 0x10 dev:/dev/i2c-${1} 2>/dev/null | grep -i Control  `
 
-OUT=${OUT##*Control}
+OUT=`gdbus call --system --dest ddccontrol.DDCControl --object-path=/ddccontrol/DDCControl --method ddccontrol.DDCControl.GetControl dev:/dev/i2c-${1} 0x10  `
+sleep 0.05
+OUT=`gdbus call --system --dest ddccontrol.DDCControl --object-path=/ddccontrol/DDCControl --method ddccontrol.DDCControl.GetControl dev:/dev/i2c-${1} 0x10  `
+sleep 0.05
+OUT=`gdbus call --system --dest ddccontrol.DDCControl --object-path=/ddccontrol/DDCControl --method ddccontrol.DDCControl.GetControl dev:/dev/i2c-${1} 0x10  `
 
-OUT=${OUT#*/}
+OUT=${OUT%,*}
+OUT=${OUT##* }
+
+OUT=${OUT%,*}
 BRIGHTNESS=${OUT%/*}
 
 printf $BRIGHTNESS > $HOME/.cache/wayward-brightness

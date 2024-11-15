@@ -79,7 +79,7 @@ To hide apps from /usr/share/applications edit weston.ini and add the following 
 ## Brightness control with ddccontrol
 
 Since 1.4.0 it is possible to control monitor brightness with ddccontrol.
-First install ddccontrol, and test to see if it is working with your monitor.
+First install ddccontrol and glib2, and test to see if ddccontrol is working with your monitor.
 Then add the following to weston.ini, where example is the number from /dev/i2c-number
 in the output of `ddccontrol -p`. Brightness can then be changed from the app panel.
 
@@ -107,6 +107,20 @@ To hide the sound control edit weston.ini and add the following to the shell sec
 
     disable-sound-icons=true
 
+## Disabling app panel auto-hide
+
+To disable auto-hide edit weston.ini and add the following to the shell section.
+
+    enable-autohide=true
+
+
+## Change icon size in the app panel
+
+To change the default icon size edit weston.ini and add the following to the shell section.
+Icon sizes can be between 32 and 64.
+
+    icon-size=new-size
+
 ## Pincodes
 
 Since 1.2.5 it is now possible to set numeric, up to six digit, pincodes for the lock screen.
@@ -117,6 +131,8 @@ To set a pincode run as root wayward-set-pincode, and then restart weston. For e
 
 
 ## Changelog
+
+1.4.1 - Add icon sizes for the app panel, allow disabling auto-hide of the app panel.
 
 1.4.0 - Update to Weston 14.0. Add brightness control with ddcontrol or brightnessctl.
 

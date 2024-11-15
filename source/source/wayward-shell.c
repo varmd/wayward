@@ -101,12 +101,12 @@ typedef gint64 gfixed;
 
 #define WAYWARD_HIDE_X 43371
 #define WAYWARD_NO_MOVE_X -13371
-#define WAYWARD_INITIAL_HEIGHT 52
+#define WAYWARD_INITIAL_HEIGHT 82
 #define WAYWARD_PANEL_LEAVE_BUG_Y 47
+
 #define WAYWARD_ICON_SIZE 32
 #define WAYWARD_AUDIO_STEP 3
-#define WAYWARD_BATTERY_X 69
-#define WAYWARD_BATTERY_Y 30
+
 
 //https://github.com/rev22/svgViewer/blob/master/svgViewer.c
 
@@ -155,12 +155,18 @@ struct desktop {
   long current_volume;
   double current_volume_percentage;
 
+	bool enable_autohide;
+
   int current_brightness;
 	bool enable_brightness_ddc;
 	int ddc_i2c_number;
 	bool enable_brightness_ctl;
 	char *brightnessctl_device;
 
+  int panel_height;
+  int panel_spacing;
+  int icon_size;
+  int panel_font_size;
 	int right_icons;
 
   struct toytimer shm_timer;
@@ -308,12 +314,12 @@ int global_desktop_height = 0;
 int global_grid_width = 0;
 int global_grid_height = 0;
 int global_monitor_count = 0;
-int global_panel_monitor = 1;
+
 int global_events_configured = 0;
 int global_keyboard_configured = 0;
 
 int global_power_inhibit = 0;
-int global_clock_hide = 0;
+
 int global_panel_in = 0;
 int global_panel_in_y = 0;
 
@@ -529,6 +535,8 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 	struct panel_launcher *launcher = data;
 	struct rectangle allocation;
 	cairo_t *cr;
+//	int image_height = cairo_image_surface_get_height(launcher->icon) / 2;
+	int image_height = launcher->panel->desktop->icon_size / 2;
 
 //  if(launcher->force_x == WAYWARD_HIDE_X) {
 //    return;
@@ -543,25 +551,31 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 
 	if (allocation.width > allocation.height)
 		allocation.x += allocation.width / 2 - allocation.height / 2;
-	allocation.y += allocation.height / 2 -
-		cairo_image_surface_get_height(launcher->icon) / 2;
-	if (allocation.height > allocation.width)
-		allocation.y += allocation.height / 2 - allocation.width / 2;
+
+//	allocation.y += allocation.height / 2 -
+//		cairo_image_surface_get_height(launcher->icon) / 2;
+//	if (allocation.height > allocation.width)
+//		allocation.y += allocation.height / 2 - allocation.width / 2;
+
 	if (launcher->pressed) {
 		allocation.x++;
 		allocation.y++;
 	}
+
+	allocation.y = floor( (launcher->panel->desktop->panel_spacing)  );
 
   //special case to hide launchers for clock section
   if(launcher->force_x) {
     allocation.x = launcher->force_x;
   }
 
-  if(launcher == launcher->panel->volumeup_launcher)
-    printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
-  //cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+//  if(launcher == launcher->panel->volumeup_launcher)
+//    printf("Launcher allocation x y %d %d \n", allocation.x, allocation.y);
+//  cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+
 	cairo_set_source_surface(cr, launcher->icon,
 				 allocation.x, allocation.y);
+		//		 allocation.x, allocation.y);
 
   cairo_paint(cr);
 
@@ -693,11 +707,11 @@ static void panel_focus_handler(struct window *window,
   }
 
 
-
-  shell_helper_move_surface (global_desktop->helper,
-    panel->wl_surface,
-    WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
-  );
+  if(panel->desktop->enable_autohide)
+    shell_helper_move_surface (panel->desktop->helper,
+      panel->wl_surface,
+      WAYWARD_NO_MOVE_X, global_desktop_height - panel->desktop->panel_height
+    );
 
 
   wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
@@ -852,7 +866,7 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 
   clock->panel->painted = 0;
 	cr = widget_cairo_create(clock->panel->widget);
-	cairo_set_font_size(cr, 22);
+	cairo_set_font_size(cr, clock->panel->desktop->panel_font_size);
 
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
@@ -861,7 +875,7 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 	cairo_text_extents(cr, string, &extents);
 	if (allocation.x > 0)
 		allocation.x +=
-			allocation.width - DEFAULT_SPACING * 1.5 - extents.width;
+			allocation.width - clock->panel->desktop->panel_spacing * 1.5 - extents.width;
 	else
 		allocation.x +=
 			allocation.width / 2 - extents.width / 2;
@@ -869,8 +883,9 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
   if(clock->force_x)
     allocation.x = clock->force_x;
 
-	allocation.y += allocation.height / 2 - 1 + extents.height / 2;
-	//cairo_move_to(cr, allocation.x + 1, allocation.y + 1);
+//	allocation.y += allocation.height / 2 - 1 + extents.height / 2;
+	allocation.y = floor( (clock->panel->desktop->panel_height + (int)extents.height) / 2 );
+
 
 	cairo_show_text(cr, string);
 	cairo_move_to(cr, allocation.x, allocation.y);
@@ -919,24 +934,24 @@ panel_add_clock(struct panel *panel)
 	panel->clock = clock;
 
 	switch (panel->clock_format) {
-	case CLOCK_FORMAT_MINUTES:
-		clock->format_string = "%a %b %d, %I:%M %p";
-		clock->refresh_timer = 60;
-		break;
-	case CLOCK_FORMAT_SECONDS:
-		clock->format_string = "%a %b %d, %I:%M:%S %p";
-		clock->refresh_timer = 1;
-		break;
-	case CLOCK_FORMAT_MINUTES_24H:
-		clock->format_string = "%a %b %d, %H:%M";
-		clock->refresh_timer = 60;
-		break;
-	case CLOCK_FORMAT_SECONDS_24H:
-		clock->format_string = "%a %b %d, %H:%M:%S";
-		clock->refresh_timer = 1;
-		break;
-	case CLOCK_FORMAT_NONE:
-		assert(!"not reached");
+  	case CLOCK_FORMAT_MINUTES:
+  		clock->format_string = "%a %b %d, %I:%M %p";
+  		clock->refresh_timer = 60;
+  		break;
+  	case CLOCK_FORMAT_SECONDS:
+  		clock->format_string = "%a %b %d, %I:%M:%S %p";
+  		clock->refresh_timer = 1;
+  		break;
+  	case CLOCK_FORMAT_MINUTES_24H:
+  		clock->format_string = "%a %b %d, %H:%M";
+  		clock->refresh_timer = 60;
+  		break;
+  	case CLOCK_FORMAT_SECONDS_24H:
+  		clock->format_string = "%a %b %d, %H:%M:%S";
+  		clock->refresh_timer = 1;
+  		break;
+  	case CLOCK_FORMAT_NONE:
+  		assert(!"not reached");
 	}
 
 	toytimer_init(&clock->timer, CLOCK_MONOTONIC,
@@ -961,18 +976,19 @@ panel_resize_handler(struct widget *widget,
     printf("Resizing panel \n");
   }
 
-	int x = 0;
+	int x = panel->desktop->panel_spacing;
 	int y = 0;
-	int w = height > width ? width : height;
+	int force_x = 0;
+	int w = panel->desktop->icon_size;
 	int h = w;
-	int horizontal =
-	  panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP || panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
-	int first_pad_h = horizontal ? 0 : DEFAULT_SPACING / 2;
-	int first_pad_w = horizontal ? DEFAULT_SPACING / 2 : 0;
+
+  int horizontal = panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP || panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
+	int pad_h = (height - panel->desktop->icon_size) / 2;
+	int first_pad_w = panel->desktop->panel_spacing;
   int count = 0;
 
   static int right_icons = 0;
-  int _count2 = 0;
+
   struct rectangle allocation;
 
   //Special allocation x for volume/system launchers
@@ -982,80 +998,74 @@ panel_resize_handler(struct widget *widget,
         right_icons++;
       }
     }
-    right_icons++;
   }
-  _count2 = right_icons;
-  panel->desktop->right_icons = right_icons;
 
-  printf("_count2 is %d \n", _count2);
+  printf("pad_h %d %d \n", height, pad_h);
+
+  panel->desktop->right_icons = right_icons;
+//  pad_h = 0;
 
   if(!panel->allocation_set) {
 
     wl_list_for_each(launcher, &panel->launcher_list, link) {
       //Special case for shutdown/volume icons
-      if(!launcher->initial_x) {
-        widget_set_allocation(launcher->widget, x, y,
-          w + first_pad_w + 1, h + first_pad_h + 1);
-      } else {
-        widget_set_allocation(launcher->widget, launcher->initial_x, y,
-          w + first_pad_w + 1, h + first_pad_h + 1);
-      }
+      int _x = launcher->initial_x ? launcher->initial_x : x;
+      if(!count)
+        _x = _x - floor(panel->desktop->panel_spacing / 2);
 
-      if (horizontal) {
-        if(launcher->initial_x != WAYWARD_HIDE_X)
-          x += w + first_pad_w;
-      } else {
-        y += h + first_pad_h;
-      }
-      first_pad_h = first_pad_w = 0;
+      widget_set_allocation(launcher->widget, _x, y,
+        w + first_pad_w, height);
+
+      if(!launcher->initial_x)
+        x += w + panel->desktop->panel_spacing;
+
       count++;
     }
+
   }
 
 	if (panel->clock_format == CLOCK_FORMAT_SECONDS)
-		w = 170;
+		w = 250;
 	else /* CLOCK_FORMAT_MINUTES and 24H versions */
-		w = 150;
+		w = 220;
 
-	if (horizontal)
+//	if (horizontal)
 		x = width - w;
-	else
-		y = height - (h = DEFAULT_SPACING * 3);
+//	else
+//		y = height - (h = panel->desktop->panel_spacing * 3);
 
 
 	if (panel->clock) {
 
     if(!panel->clock->force_x)
 		  widget_set_allocation(panel->clock->widget,
-				      x, y, w + 1, h + 1);
+				      x, y, w, h);
     else
       widget_set_allocation(panel->clock->widget,
-				      panel->clock->force_x, y, w + 1, h + 1);
+				      panel->clock->force_x, y, w, h);
 
     if(panel->clock_allocation.width == 0)
       widget_get_allocation(panel->clock->widget, &panel->clock_allocation);
 
     widget_get_allocation(panel->clock->widget, &allocation);
 
-
 //    if(!panel->allocation_set) {
-      wl_list_for_each(launcher, &panel->launcher_list, link) {
+      force_x = panel->clock_allocation.x - panel->desktop->panel_spacing;
+      wl_list_for_each_reverse(launcher, &panel->launcher_list, link) {
 
         if(launcher->offset_right) {
           widget_get_allocation(launcher->widget, &allocation);
-          launcher->force_x = panel->clock_allocation.x - 20 - allocation.width * _count2;
+          force_x = force_x - allocation.width;
+          launcher->force_x = force_x;
           widget_set_allocation(launcher->widget, launcher->force_x, allocation.y,
           allocation.width, allocation.height);
-
-          _count2--;
         }
       }
-  //  }
+//    }
 
 
   }
 
-  printf("_count2 is %d 1 \n", _count2);
   panel->allocation_set = 1;
 }
 
@@ -1087,7 +1097,7 @@ panel_configure(void *data,
 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP:
 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
     //Panel height
-		height = WAYWARD_INITIAL_HEIGHT;
+		height = desktop->panel_height;
 		break;
 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_LEFT:
 	case WESTON_DESKTOP_SHELL_PANEL_POSITION_RIGHT:
@@ -1332,8 +1342,9 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
   	}
   	w = (int)image->width;
   	h = (int)image->height;
-  	w = 32;
-  	h = 32;
+
+  	w = height;
+  	h = height;
   	double scale = (double) height / image->height;
 
   	rast = nsvgCreateRasterizer();
@@ -1415,60 +1426,15 @@ cairo_destroy ( cr );
     }
     return NULL;
 
-    #if 0
-    RsvgHandle      * handle;
-    handle = rsvg_handle_new_from_file ( file, NULL );
-    if ( handle != NULL ) {
-        RsvgDimensionData dimensions;
-        // Update DPI.
-        rsvg_handle_set_dpi ( handle, 88 );
-        // Get size.
-        rsvg_handle_get_dimensions ( handle, &dimensions );
-        // Create cairo surface in the right size.
-        double scale = (double) height / dimensions.height;
-
-        #if 0
-        printf("%s %f %f %f scale dimensions width height \n", file, scale, dimensions.width, dimensions.height);
-        printf("%s %f %f %f scale dimensionsxscale width height \n", file, scale, (double) dimensions.width * scale, (double) dimensions.height * scale);
-        #endif
-
-        surface = cairo_image_surface_create ( CAIRO_FORMAT_ARGB32,
-                                               (double) dimensions.width * scale,
-                                               (double) dimensions.height * scale );
-        cairo_status_t status;
-        status = cairo_surface_status(surface);
-
-        if (status == CAIRO_STATUS_SUCCESS) {
-            cairo_t *cr = cairo_create ( surface );
-            cairo_scale ( cr, scale, scale );
-            rsvg_handle_render_cairo ( handle, cr );
-            cairo_destroy ( cr );
-        }
-
-        rsvg_handle_close ( handle, NULL );
-
-
-        #if 0
-        if ( G_UNLIKELY ( failed ) ) {
-            g_warning ( "Failed to render file: '%s'", file );
-            cairo_surface_destroy ( surface );
-            surface = NULL;
-        }
-        #endif
-    }
-
-
-    return surface;
-    #endif
 }
 
 
 static cairo_surface_t *
-load_icon_svg_or_fallback(const char *icon)
+load_icon_svg_or_fallback(const char *icon, int icon_size)
 {
 	cairo_status_t status;
 	cairo_t *cr;
-	cairo_surface_t *surface = cairo_image_surface_create_from_svg(icon, WAYWARD_ICON_SIZE);
+	cairo_surface_t *surface = cairo_image_surface_create_from_svg(icon, icon_size);
 
   if(surface) {
   	status = cairo_surface_status(surface);
@@ -1520,9 +1486,10 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel,
 
   if (strstr(icon, ".png") != NULL) {
 	  launcher->icon = load_icon_or_fallback(icon);
-	  launcher->icon = _cairo_image_surface_scale_nearest(launcher->icon, WAYWARD_ICON_SIZE, WAYWARD_ICON_SIZE);
+	  launcher->icon = _cairo_image_surface_scale_nearest(launcher->icon, launcher->panel->desktop->icon_size,
+	    launcher->panel->desktop->icon_size);
   } else if( strstr(icon, ".svg") != NULL ) {
-    launcher->icon = load_icon_svg_or_fallback(icon);
+    launcher->icon = load_icon_svg_or_fallback(icon, launcher->panel->desktop->icon_size);
   }
 	launcher->path = xstrdup(path);
 
@@ -2066,10 +2033,12 @@ unlock_dialog_finish(struct task *task, uint32_t events)
 	desktop->unlock_dialog = NULL;
 
 	shell_helper_set_panel (desktop->helper, desktop->panel->wl_surface);
-  shell_helper_move_surface (desktop->helper,
-    desktop->panel->wl_surface,
-    WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
-  );
+
+  if(desktop->enable_autohide)
+    shell_helper_move_surface (desktop->helper,
+      desktop->panel->wl_surface,
+      WAYWARD_NO_MOVE_X, global_desktop_height - desktop->panel_height
+    );
 	printf("Unlocked \n");
 }
 
@@ -2082,8 +2051,6 @@ desktop_shell_configure(void *data,
 {
 	struct window *window = wl_surface_get_user_data(surface);
 	struct surface *s = window_get_user_data(window);
-
-
 
 	s->configure(data, desktop_shell, edges, window, width, height);
 }
@@ -2463,23 +2430,27 @@ void wayland_pointer_enter_cb(void *data,
 		wl_fixed_t sx, wl_fixed_t sy)
 {
 
-  if(!global_desktop || !global_desktop->panel)
+  if(!global_desktop || !global_desktop->panel || !global_desktop->enable_autohide)
     return;
 
 
   if(surface == global_desktop->panel->wl_surface) {
     global_panel_in = 1;
-    shell_helper_move_surface (global_desktop->helper,
-        global_desktop->panel->wl_surface,
-        WAYWARD_NO_MOVE_X, global_desktop_height - WAYWARD_INITIAL_HEIGHT
-    );
+    if(global_desktop->enable_autohide)
+      shell_helper_move_surface (global_desktop->helper,
+          global_desktop->panel->wl_surface,
+          WAYWARD_NO_MOVE_X, global_desktop_height - global_desktop->panel_height
+      );
   }
 }
 //TODO fix without global_desktop
 void wayland_pointer_leave_cb(void *data,
 		struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface)
 {
-  if(!global_desktop || !global_desktop->panel || global_panel_in_y > WAYWARD_PANEL_LEAVE_BUG_Y)
+  if(!global_desktop || !global_desktop->panel
+    || global_panel_in_y > WAYWARD_PANEL_LEAVE_BUG_Y
+    || !global_desktop->enable_autohide
+    )
     return;
 
   if(surface == global_desktop->panel->wl_surface) {
@@ -2489,7 +2460,6 @@ void wayland_pointer_leave_cb(void *data,
         global_desktop->panel->wl_surface,
         WAYWARD_NO_MOVE_X, global_desktop_height - 5
     );
-
     if(global_desktop->panel->clock_state == VOLUME_SHOWN) {
       launch_volume(global_desktop->panel->volumeup_launcher);
     } else if(global_desktop->panel->clock_state == SYSTEM_SHOWN) {
@@ -2498,7 +2468,7 @@ void wayland_pointer_leave_cb(void *data,
       launch_brightness(global_desktop->panel->brightnessup_launcher);
     }
 
-    window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
+    window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
   }
 }
 
@@ -2886,7 +2856,7 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
   char buff[10] = {'\0'};
   int padding_right = 0;
 	int battery_level = 0;
-
+	int right_icons = battery->panel->desktop->right_icons;
 
   if(!battery->panel->allocation_set) {
     return;
@@ -2902,11 +2872,23 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
     sprintf(string, "%s%%", buff);
   }
 
+#if 0
+  battery_level = 100;
+  sprintf(string, "%d%%", battery_level);
+#endif
+
 	widget_get_allocation(widget, &allocation);
 
   battery->panel->painted = 0;
 	cr = widget_cairo_create(battery->panel->widget);
-	cairo_set_font_size(cr, 22);
+	cairo_set_font_size(cr, battery->panel->desktop->panel_font_size);
+
+  padding_right = 1.5 * battery->panel->desktop->panel_font_size;
+	if(battery_level >= 100) {
+	  padding_right = battery->panel->desktop->panel_font_size * 2.5;
+	} else if (battery_level > 0) {
+	  padding_right = battery->panel->desktop->panel_font_size * 2;
+	}
 
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
@@ -2914,12 +2896,19 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
 
 	cairo_text_extents(cr, string, &extents);
 
-  if(battery_level == 100) {
-    padding_right = 15;
-  }
+//battery->panel->desktop->icon_size + right_icons *
 
-  allocation.x = battery->panel->clock_allocation.x - battery->panel->desktop->right_icons * WAYWARD_BATTERY_X - padding_right;
-	allocation.y = WAYWARD_BATTERY_Y;
+  allocation.x = battery->panel->clock_allocation.x
+    - battery->panel->desktop->panel_spacing
+    - (right_icons * battery->panel->desktop->icon_size)
+    - (right_icons * battery->panel->desktop->panel_spacing)
+    - battery->panel->desktop->panel_spacing
+    - padding_right;
+//	allocation.y = battery->panel->desktop->panel_height - battery->panel->desktop->panel_font_size;
+
+  //TODO figure out why
+  //For some reason, Cairo draws above y here
+  allocation.y = floor( (battery->panel->desktop->panel_height + (int)extents.height) / 2 );
 
 	cairo_show_text(cr, string);
 	cairo_move_to(cr, allocation.x, allocation.y);
@@ -2927,7 +2916,7 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
 	cairo_show_text(cr, string);
 	cairo_destroy(cr);
 
-  printf("Redrawing battery %d \n", battery_level);
+  printf("Redrawing battery %d %d \n", battery_level, allocation.y);
 
 }
 
@@ -3030,7 +3019,7 @@ static void launch_system(struct panel_launcher *launcher) {
   widget_schedule_redraw(launcher->panel->reboot_launcher->widget);
   widget_schedule_redraw(launcher->panel->shutdown_launcher->widget);
   widget_schedule_redraw(launcher->panel->clock->widget);
-  window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
+  window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
 }
 
 static void panel_brightness_label_redraw_handler(struct widget *widget, void *data) {
@@ -3048,7 +3037,7 @@ static void panel_brightness_label_redraw_handler(struct widget *widget, void *d
 
   label->panel->painted = 0;
 	cr = widget_cairo_create(label->panel->widget);
-	cairo_set_font_size(cr, 20);
+	cairo_set_font_size(cr, label->panel->desktop->panel_font_size);
 
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
@@ -3057,14 +3046,16 @@ static void panel_brightness_label_redraw_handler(struct widget *widget, void *d
 	cairo_text_extents(cr, string, &extents);
 
   allocation.x = label->panel->clock_allocation.x;
-  allocation.y = 31;
+  //TODO figure out why
+  //For some reason, Cairo draws above y here
+  allocation.y = floor( (label->panel->desktop->panel_height + (int)extents.height) / 2 );
 
   if(label->force_x)
     allocation.x = label->force_x;
 
-	printf("Brightness label drawn annotation x y %d \n", allocation.x, allocation.y);
+	printf("Brightness label drawn annotation x y %d %d %d \n", allocation.x, allocation.y, label->panel->desktop->panel_height);
 
-	cairo_move_to(cr, allocation.x, 31);
+	cairo_move_to(cr, allocation.x, allocation.y);
 	cairo_set_source_rgba(cr, 1, 1, 1, 1);
 	cairo_show_text(cr, string);
 	cairo_destroy(cr);
@@ -3086,7 +3077,7 @@ static void panel_volume_label_redraw_handler(struct widget *widget, void *data)
 
   label->panel->painted = 0;
 	cr = widget_cairo_create(label->panel->widget);
-	cairo_set_font_size(cr, 20);
+	cairo_set_font_size(cr, label->panel->desktop->panel_font_size);
 
   cairo_select_font_face (cr, "Droid Sans",
 				CAIRO_FONT_SLANT_NORMAL,
@@ -3095,14 +3086,16 @@ static void panel_volume_label_redraw_handler(struct widget *widget, void *data)
 	cairo_text_extents(cr, string, &extents);
 
   allocation.x = label->panel->clock_allocation.x;
-  allocation.y = 31;
+  //TODO figure out why
+  //For some reason, Cairo draws above y here
+  allocation.y = floor( (label->panel->desktop->panel_height + (int)extents.height) / 2 );
 
   if(label->force_x)
     allocation.x = label->force_x;
 
-	printf("Volume label drawn annotation x y %d \n", allocation.x, allocation.y);
+	printf("Volume label drawn annotation x y %d %d %f \n", allocation.x, allocation.y, extents.height);
 
-	cairo_move_to(cr, allocation.x, 31);
+	cairo_move_to(cr, allocation.x, allocation.y);
 	cairo_set_source_rgba(cr, 1, 1, 1, 1);
 	cairo_show_text(cr, string);
 	cairo_destroy(cr);
@@ -3131,11 +3124,11 @@ static void launch_brightness(struct panel_launcher *launcher) {
   struct rectangle allocation;
   struct rectangle widget_allocation;
 	cairo_t *cr;
-  int label_padding = 45;
+  int label_padding = 0;
 
 	widget_get_allocation(launcher->panel->reboot_launcher->widget, &widget_allocation);
 
-	 printf("Brightness shown 0 %d \n", launcher->panel->desktop->current_brightness);
+	printf("Brightness shown 0 %d \n", launcher->panel->desktop->current_brightness);
 
   if(launcher->panel->clock_state == SYSTEM_SHOWN) {
     launch_system(launcher);
@@ -3143,25 +3136,26 @@ static void launch_brightness(struct panel_launcher *launcher) {
     launch_volume(launcher);
 	}
 
-
-
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
 
-
-
-    if(launcher->panel->desktop->current_brightness == 100) {
-      label_padding = 41;
+    if(launcher->panel->desktop->current_brightness < 100) {
+      label_padding = floor(launcher->panel->desktop->panel_spacing * 0.5);
     }
 
     printf("Brightness shown 1 %d \n", launcher->panel->desktop->current_brightness);
 
     clock_hide(launcher->panel->clock);
     launcher->panel->brightnessdown_launcher->force_x = launcher->panel->clock_allocation.x;
-    launcher->panel->brightnessup_launcher->force_x = launcher->panel->clock_allocation.x + 84;
     launcher->panel->brightnessdown_launcher->initial_x = launcher->panel->clock_allocation.x;
-    launcher->panel->brightnessup_launcher->initial_x = launcher->panel->clock_allocation.x + 84;
+
+    launcher->panel->brightnessup_launcher->force_x = launcher->panel->clock_allocation.x
+      + 2 * launcher->panel->desktop->icon_size + 2 * launcher->panel->desktop->panel_spacing;
+    launcher->panel->brightnessup_launcher->initial_x = launcher->panel->clock_allocation.x
+      + 2 * launcher->panel->desktop->icon_size + 2 * launcher->panel->desktop->panel_spacing;
     //brightness label
-    launcher->panel->brightness_label->force_x = launcher->panel->clock_allocation.x + label_padding;
+    launcher->panel->brightness_label->force_x = launcher->panel->clock_allocation.x +
+      launcher->panel->desktop->icon_size + launcher->panel->desktop->panel_spacing + label_padding;
+
     launcher->panel->clock_state = BRIGHTNESS_SHOWN;
 
 	} else {
@@ -3189,8 +3183,8 @@ static void launch_brightness(struct panel_launcher *launcher) {
   widget_set_allocation(launcher->panel->brightness_label->widget,
     launcher->panel->brightness_label->force_x,
     widget_allocation.y,
-		40,
-    50
+		widget_allocation.width,
+    widget_allocation.height
   );
 
   widget_schedule_redraw(launcher->panel->brightnessdown_launcher->widget);
@@ -3206,7 +3200,7 @@ static void launch_volume(struct panel_launcher *launcher) {
   struct rectangle allocation;
   struct rectangle widget_allocation;
 	cairo_t *cr;
-  int label_padding = 45;
+  int label_padding = 0;
 
 	widget_get_allocation(launcher->panel->volumeup_launcher->widget, &widget_allocation);
 
@@ -3218,17 +3212,22 @@ static void launch_volume(struct panel_launcher *launcher) {
 
 
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
-    if(global_desktop->current_volume_percentage == 100) {
-      label_padding = 41;
+    if(global_desktop->current_volume_percentage < 100) {
+      label_padding = floor(launcher->panel->desktop->panel_spacing * 0.5);
     }
 
     clock_hide(launcher->panel->clock);
     launcher->panel->volumedown_launcher->force_x = launcher->panel->clock_allocation.x;
-    launcher->panel->volumeup_launcher->force_x = launcher->panel->clock_allocation.x + 84;
     launcher->panel->volumedown_launcher->initial_x = launcher->panel->clock_allocation.x;
-    launcher->panel->volumeup_launcher->initial_x = launcher->panel->clock_allocation.x + 84;
+
+    launcher->panel->volumeup_launcher->force_x = launcher->panel->clock_allocation.x
+      + 2 * launcher->panel->desktop->icon_size + 2 * launcher->panel->desktop->panel_spacing;
+    launcher->panel->volumeup_launcher->initial_x = launcher->panel->clock_allocation.x
+      + 2 * launcher->panel->desktop->icon_size + 2 * launcher->panel->desktop->panel_spacing;
+
     //volume label
-    launcher->panel->volume_label->force_x = launcher->panel->clock_allocation.x + label_padding;
+    launcher->panel->volume_label->force_x = launcher->panel->clock_allocation.x +
+      launcher->panel->desktop->icon_size + launcher->panel->desktop->panel_spacing + label_padding;
     launcher->panel->clock_state = VOLUME_SHOWN;
 
 	} else {
@@ -3256,13 +3255,13 @@ static void launch_volume(struct panel_launcher *launcher) {
     widget_allocation.height
   );
 
-
+  widget_get_allocation(launcher->panel->volume_label->widget, &widget_allocation);
 
   widget_set_allocation(launcher->panel->volume_label->widget,
     launcher->panel->volume_label->force_x,
     widget_allocation.y,
-		40,
-    50
+		widget_allocation.width,
+    widget_allocation.height
   );
 
 
@@ -3409,15 +3408,23 @@ static void set_brightness_ddc (int brightness, int ddc_i2c_number) {
 		return;
 	}
 
-  sprintf(c, "-w %d", brightness);
+//  sprintf(c, "-w %d", brightness);
+  sprintf(c, "%d", brightness);
   sprintf(dev, "dev:/dev/i2c-%d", ddc_i2c_number);
-  execl ("/usr/bin/ddccontrol", "/usr/bin/ddccontrol", "-r 0x10", c, dev, (char *)0);
-  return;
-
-    //  char *newargv[] = { "/usr/bin/ddccontrol", " -r 0x10 -w 12 dev:/dev/i2c-3", NULL };
-//  execve(newargv[0], newargv, environ);
+  //execl ("/usr/bin/ddccontrol", "/usr/bin/ddccontrol", "-r 0x10", c, dev, (char *)0);
+  execl ("/usr/bin/gdbus", "/usr/bin/gdbus",
+    "call",
+    "--system",
+    "--dest=ddccontrol.DDCControl",
+    "--object-path=/ddccontrol/DDCControl",
+    "--method=ddccontrol.DDCControl.SetControl",
+    dev,
+    "0x10",
+    c,
+    (char *)0);
 
 }
+
 static void brightness_up (struct panel_launcher *launcher) {
  int brightness = launcher->panel->desktop->current_brightness + 5;
   if(brightness > 100)
@@ -3580,6 +3587,7 @@ static int wayward_add_brightness(struct panel *panel, struct desktop *desktop)
   char path_buf[1256];
   char ddc_buf[128];
   char ctl_buf[256];
+  static int ddc_retries = 0;
 
   printf("Adding brightness %d \n", desktop->enable_brightness_ddc);
 
@@ -3627,6 +3635,10 @@ static int wayward_add_brightness(struct panel *panel, struct desktop *desktop)
   fclose (file);
 
   if(brightness > 100 || brightness < 0) {
+    ddc_retries++;
+    if(ddc_retries < 3)
+      return wayward_add_brightness(panel, desktop);
+
     return -1;
   }
 
@@ -4037,7 +4049,32 @@ int main(int argc, char *argv[])
 	weston_config_section_get_bool(s, "locking", &desktop.locking, true);
 
   weston_config_section_get_string(s, "pin-code", &desktop.pincode, NULL);
-//  desktop.pincode = "wyuQRH90gc4arvr9naCBMtuluE/eLxGKg/Bt9WNkRNfk+NS2";
+
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_bool(s, "enable-autohide", &desktop.enable_autohide, true);
+
+
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_int(s, "icon-size", &desktop.icon_size, WAYWARD_ICON_SIZE);
+
+
+
+	if(desktop.icon_size >= 64) {
+	  desktop.icon_size = 64;
+	  desktop.panel_font_size = 24;
+	} else if(desktop.icon_size > 32 && desktop.icon_size < 64) {
+	  desktop.panel_font_size = 22;
+	} else if(desktop.icon_size <= 32) {
+	  desktop.icon_size = 32;
+    desktop.panel_font_size = 20;
+	}
+
+	desktop.panel_spacing = 10;
+	if(desktop.icon_size > 32) {
+	  desktop.panel_spacing = floor( (desktop.icon_size / 32) * 10 );
+	}
+
+	desktop.panel_height = desktop.icon_size + 20;
 
 	parse_panel_position(&desktop, s);
 	parse_clock_format(&desktop, s);

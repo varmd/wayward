@@ -14,7 +14,8 @@ depends+=('glibc'
          'libjpeg-turbo'
          'libpng'
          'mesa'
-         "libdisplay-info"
+         'libdisplay-info'
+         'seatd'
          )
 makedepends+=('ninja' 'meson' );
 source=("https://gitlab.freedesktop.org/wayland/weston/-/archive/15.0.0/weston-15.0.0.zip")

@@ -11,6 +11,7 @@ depends+=('glibc'
          'libdrm'
          'pam'
          'cairo'
+         'libjpeg-turbo'
          'libpng'
          'mesa'
          "libdisplay-info"

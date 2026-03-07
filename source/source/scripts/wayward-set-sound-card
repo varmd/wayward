@@ -1,0 +1,78 @@
+#!/bin/bash
+
+stringContains() { [ -z "${2##*$1*}" ]; }
+
+connect_bluetooth() {
+    DEVICE_MAC=$1;
+
+    echo $DEVICE_MAC;
+
+    # Bluetoothctl commands
+    bluetoothctl << EOF
+    connect $DEVICE_MAC
+    quit
+EOF
+#    bluetoothctl << EOF
+#    scan on
+#    exit
+#EOF
+#    sleep 3
+#    bluetoothctl << EOF
+#    connect $DEVICE_MAC
+#EOF
+#    bluetoothctl << EOF
+#    scan off
+#    exit
+#EOF
+}
+
+
+
+if [[ "$1" = "bluealsa" ]]; then
+  BLUEALSA=1;
+else
+  if [[ -z "$1" ]]; then
+    echo "no sound card number"
+    exit;
+  fi
+  if [[ -z "$2" ]]; then
+    echo "no sound card device"
+    exit;
+  fi
+fi
+
+
+
+touch $HOME/.asoundrc
+#defaults.pcm.!card "Device"
+
+
+
+if [[ -z "$BLUEALSA" ]]; then
+
+  sed -i '/defaults.pcm.card/d' $HOME/.asoundrc
+  sed -i '/defaults.ctl.card/d' $HOME/.asoundrc
+  sed -i '/defaults.pcm.device/d' $HOME/.asoundrc
+  sed -i '/default bluealsa/d' $HOME/.asoundrc
+  sed -i '/default bluealsa/d' $HOME/.asoundrc
+
+  echo "defaults.pcm.card $1" >> $HOME/.asoundrc
+  echo "defaults.ctl.card $1" >> $HOME/.asoundrc
+  echo "defaults.pcm.device $2" >> $HOME/.asoundrc
+
+else
+
+  sed -i '/default bluealsa/d' $HOME/.asoundrc
+  sed -i '/default bluealsa/d' $HOME/.asoundrc
+
+  #if [[ -z "$2" ]]; then
+    #echo "";
+  #else
+   #connect_bluetooth $2 &
+  #fi
+
+  echo "pcm.!default bluealsa" >> $HOME/.asoundrc
+  echo "ctl.!default bluealsa" >> $HOME/.asoundrc
+
+fi
+

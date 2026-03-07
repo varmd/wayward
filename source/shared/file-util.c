@@ -130,14 +130,14 @@ file_create_dated(const char *path, const char *prefix, const char *suffix,
 char *
 file_name_with_datadir(const char *filename)
 {
-	const char *base = "/usr/share/weston";
+	const char *base = "/usr/share/wayward";
 	char *out;
 	int len;
 
 	if (base)
 		len = asprintf(&out, "%s/%s", base, filename);
 	else
-		len = asprintf(&out, "%s/weston/%s", DATADIR, filename);
+		len = asprintf(&out, "%s/wayward/%s", DATADIR, filename);
 
 	if (len == -1)
 		return NULL;

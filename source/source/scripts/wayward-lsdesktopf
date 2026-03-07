@@ -16,14 +16,14 @@ mapfile -d $'\n' array < <(ls -rd -a /usr/share/applications/* | sort --ignore-c
 
 for i in "${array[@]}"
 do
-  
-  
+
+
   NODISPLAY=`cat $i | grep NoDisplay`
-  
+
   if [[ -z "$NODISPLAY" ]]; then
     LOCAL_EXE=`cat $i | grep ^Exec= | head -1 | sed 's/Exec=//g' | sed 's/%.//' | sed -e 's/--.*//' `
     first_char_exe=${LOCAL_EXE:0:1}
-     
+
     LOCAL_ICON=`cat $i | grep Icon= | head -1 | sed 's/Icon=//g' `
     #echo $LOCAL_ICON
     #echo -n "$i"
@@ -33,13 +33,13 @@ do
     else
       array1+=("/usr/bin/${LOCAL_EXE}")
     fi
-    
+
     if [ ! -f ${LOCAL_ICON} ]; then
-    
+
       if [ ! -f "/usr/share/icons/hicolor/scalable/apps/${LOCAL_ICON}.svg" ]; then
         if [ ! -f "/usr/share/pixmaps/${LOCAL_ICON}.png" ]; then
           array1+=(${BACKUP_ICON})
-        else  
+        else
           array1+=("/usr/share/pixmaps/${LOCAL_ICON}.png")
         fi
       else
@@ -50,8 +50,8 @@ do
     fi
 
   fi
-   
-   
+
+
    # or do whatever with individual element of the array
 done
 

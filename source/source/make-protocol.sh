@@ -1,10 +1,12 @@
 
+#      "../protocol/text-cursor-position.xml"
+
 declare -a arr=(
   "/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
   "/usr/share/wayland-protocols/stable/viewporter/viewporter.xml"
   "/usr/share/wayland-protocols/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml"
   "/usr/share/wayland-protocols/unstable/relative-pointer/relative-pointer-unstable-v1.xml"
-      "../protocol/text-cursor-position.xml"
+  "/usr/share/wayland-protocols/staging/single-pixel-buffer/single-pixel-buffer-v1.xml"
       "../protocol/weston-desktop-shell.xml"
 )
 

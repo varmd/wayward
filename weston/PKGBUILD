@@ -1,0 +1,70 @@
+# $Id$
+# Maintainer: Sébastien Luttringer
+# Contributor: Joel Teichroeb <joel@teichroeb.net>
+
+depends+=('glibc'
+         'wayland'
+         'libxkbcommon'
+         'libinput'
+         'pixman'
+         'libdrm'
+         'pam'
+         'cairo'
+         'libpng'
+         'mesa'
+         "libdisplay-info"
+         )
+makedepends+=('ninja' 'meson' );
+source=("https://gitlab.freedesktop.org/wayland/weston/-/archive/15.0.0/weston-15.0.0.zip")
+sha256sums=("SKIP")
+
+
+build_weston() {
+  rm -rf *.zip
+  cd weston-*
+
+  # fix accidental recording
+  patch -Np1 < ../../weston/weston-disable-capture-wcap.patch
+  # fix amd crash
+  patch -Np1 < ../../weston/weston-disable-assert-on-frame-time.patch
+
+
+  arch-meson build . \
+    -Drenderer-vulkan=false \
+    -Dbackend-headless=false \
+    -Dbackend-pipewire=false \
+    -Dbackend-vnc=false \
+    -Dbackend-x11=false \
+    -Dbackend-rdp=false \
+    -Dshell-ivi=false \
+    -Dremoting=false \
+    -Dbackend-x11=false \
+    -Dsystemd=false \
+    -Dshell-ivi=false \
+    -Dshell-kiosk=false \
+    -Dshell-lua=false \
+    -Dshell-desktop=true \
+    -Dcolor-management-lcms=false \
+    -Dimage-webp=false \
+    -Dtools= \
+    -Ddemo-clients=false \
+    -Dpipewire=false \
+    -Dsimple-clients= \
+    -Ddemo-clients=false \
+    -Dresize-pool=false \
+    -Dwcap-decode=false \
+    -Dtest-junit-xml=false \
+    -Ddoc=false \
+    -Dtests=false \
+    -Dxwayland=false
+
+    ninja -C build
+}
+
+package_weston2() {
+  cd $srcdir
+  cd weston-*
+  DESTDIR="$pkgdir" ninja -C build install &>/dev/null
+
+
+}

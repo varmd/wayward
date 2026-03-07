@@ -17,7 +17,7 @@ struct wl_resource;
 /**
  * @page page_shell_helper The shell_helper protocol
  * @section page_ifaces_shell_helper Interfaces
- * - @subpage page_iface_shell_helper - 
+ * - @subpage page_iface_shell_helper -
  */
 struct shell_helper;
 struct weston_desktop_shell;
@@ -71,7 +71,7 @@ struct shell_helper_interface {
 	 */
 	void (*change_gamma)(struct wl_client *client,
 			     struct wl_resource *resource,
-			     struct wl_resource *surface,
+			     struct wl_resource *shell,
 			     int32_t reset);
 	/**
 	 */
@@ -110,10 +110,31 @@ struct shell_helper_interface {
 			       struct wl_resource *seat);
 	/**
 	 */
-	void (*move_background_surface)(struct wl_client *client,
+	void (*input_panel_surface)(struct wl_client *client,
 					struct wl_resource *resource,
 					struct wl_resource *shell,
-					struct wl_resource *background_surface);
+					struct wl_resource *input_panel_surface);
+	/**
+	 */
+	void (*toggle_input_panel)(struct wl_client *client,
+					struct wl_resource *resource,
+					struct wl_resource *shell,
+					int show);
+	/**
+	 */
+	void (*input_key)(struct wl_client *client,
+					struct wl_resource *resource,
+					struct wl_resource *shell,
+					uint32_t key);
+
+	/**
+	 */
+	void (*input_keymap)(struct wl_client *client,
+					struct wl_resource *resource,
+					struct wl_resource *shell,
+					int fd,
+					size_t size);
+
 };
 
 
@@ -164,7 +185,22 @@ struct shell_helper_interface {
 /**
  * @ingroup iface_shell_helper
  */
-#define SHELL_HELPER_MOVE_BACKGROUND_SURFACE_SINCE_VERSION 1
+#define SHELL_HELPER_INPUT_PANEL_SURFACE_SINCE_VERSION 1
+
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_TOGGLEINPUT_PANEL_SINCE_VERSION 1
+
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_INPUT_KEY_SINCE_VERSION 1
+
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_INPUT_KEYMAP_SINCE_VERSION 1
 
 #ifdef  __cplusplus
 }

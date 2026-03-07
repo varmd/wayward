@@ -76,6 +76,7 @@ typedef void *EGLContext;
 #include "shared/xalloc.h"
 #include <libweston/zalloc.h>
 #include "xdg-shell-client-protocol.h"
+#include "single-pixel-buffer-v1-client-protocol.h"
 #include "text-cursor-position-client-protocol.h"
 #include "pointer-constraints-unstable-v1-client-protocol.h"
 #include "relative-pointer-unstable-v1-client-protocol.h"
@@ -112,6 +113,7 @@ struct display {
 	struct xdg_wm_base *xdg_shell;
 	struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
 	struct zwp_pointer_constraints_v1 *pointer_constraints;
+	struct wp_single_pixel_buffer_manager_v1 *single_pixel_buffer_manager;
 	EGLDisplay dpy;
 	EGLConfig argb_config;
 	EGLContext argb_ctx;
@@ -1425,6 +1427,36 @@ surface_flush(struct surface *surface)
 	cairo_surface_destroy(surface->cairo_surface);
 	surface->cairo_surface = NULL;
 }
+
+void
+widget_surface_flush(struct widget *widget)
+{
+	struct surface *surface = widget->surface;
+
+	if (surface->opaque_region) {
+		wl_surface_set_opaque_region(surface->surface,
+					     surface->opaque_region);
+		wl_region_destroy(surface->opaque_region);
+		surface->opaque_region = NULL;
+	}
+
+	if (surface->input_region) {
+		wl_surface_set_input_region(surface->surface,
+					    surface->input_region);
+		wl_region_destroy(surface->input_region);
+		surface->input_region = NULL;
+	}
+
+	if (surface->viewport) {
+		wp_viewport_set_destination(surface->viewport,
+					    widget->viewport_dest_width,
+					    widget->viewport_dest_height);
+	}
+
+	wl_surface_damage(surface->surface, 0, 0, INT32_MAX, INT32_MAX);
+	wl_surface_commit(surface->surface);
+}
+
 
 int
 window_has_focus(struct window *window)
@@ -6037,7 +6069,12 @@ registry_handle_global(void *data, struct wl_registry *registry, uint32_t id,
 		d->text_cursor_position =
 			wl_registry_bind(registry, id,
 					 &text_cursor_position_interface, 1);
-	} else if (strcmp(interface, "wl_subcompositor") == 0) {
+	} else if (strcmp(interface, wp_single_pixel_buffer_manager_v1_interface.name) == 0) {
+		d->single_pixel_buffer_manager =
+			wl_registry_bind(registry, id,
+					 &wp_single_pixel_buffer_manager_v1_interface,
+					 1);
+  } else if (strcmp(interface, "wl_subcompositor") == 0) {
 		d->subcompositor =
 			wl_registry_bind(registry, id,
 					 &wl_subcompositor_interface, 1);
@@ -6414,6 +6451,13 @@ display_get_compositor(struct display *display)
 {
 	return display->compositor;
 }
+
+struct wp_single_pixel_buffer_manager_v1 *
+display_get_single_pixel_buffer_manager(struct display *display)
+{
+	return display->single_pixel_buffer_manager;
+}
+
 
 uint32_t
 display_get_serial(struct display *display)

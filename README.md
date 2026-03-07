@@ -45,10 +45,15 @@ For shutdown and reboot icons to work install sudo and add to /etc/sudoers
 
 **Requirements**
 
-* weston and wayland
+* wayland
 * ttf-droid
 * cairo
 * sudo
+
+## Weston
+
+Due to delays with Arch Linux major weston releases, wayward PKGBUILD now also includes weston.
+Weston compilation options can be changed by editing weston/PKGBUILD
 
 ----
 ## Keyboard shortcuts
@@ -111,7 +116,7 @@ To hide the sound control edit weston.ini and add the following to the shell sec
 
 To disable auto-hide edit weston.ini and add the following to the shell section.
 
-    enable-autohide=true
+    enable-autohide=false
 
 
 ## Change icon size in the app panel
@@ -129,8 +134,38 @@ To set a pincode run as root wayward-set-pincode, and then restart weston. For e
 
     wayward-set-pincode 335545 username
 
+## Sound card control
+
+Since 1.5 it is possible to use panel sound controls to switch sound cards when using ALSA. This can be done by adding the below to the shell section.
+Sound card name can be obtained from `aplay -L`. For example for Intel soundcards it is usually `HD-Audio Generic`.
+Device number is usually 0 for analog or USB sound cards, and non zero for HDMI cards. It can be obtained by running `aplay -l`.
+Mixer name is usually Master or PCM, and can be obtained by running `alsamixer`.
+
+    multiple-sound-cards=Sound card name,Device num,Mixer name|HDA ATI HDMI,9,PCM
+
+After adding the sound card, it should be possible to switch working sound cards by clicking to the right of the volume up button.
+Sound card change will only affect newly launched apps.
+
+### Bluealsa
+
+It is possible to use sound card controls to switch to bluealsa for bluetooth headphones or speakers. See below for an example.
+Due to buggy ALSA services, this setting should only be used when a USB or built-in bluetooth adapter is present
+and bluealsad and bluetoothd are working.
+
+   multiple-sound-cards=Sound card name,Device num,Mixer name|HDA ATI HDMI,9,PCM|bluealsa,0,0
+
+## Virtual keyboard
+
+Basic virtual keyboard was added in 1.5. It can be disabled by adding the following to the shell section.
+
+  virtual-keyboard=false
+
 
 ## Changelog
+
+1.5.1 - Update to Weston 15.0 . Add initial touch support. Add initial virtual keyboard.
+        Add initial multiple sound card control.
+        Include Weston in the Github build.
 
 1.4.1 - Add icon sizes for the app panel, allow disabling auto-hide of the app panel.
 
@@ -164,6 +199,7 @@ To set a pincode run as root wayward-set-pincode, and then restart weston. For e
 ## Known issues and limitations
 
 * If there are large number of applications in /usr/share/applications, app icons will overlap with system icons. This can be fixed by hiding apps in weston.ini.
+* Icon names in /usr/share/applications should be in latin - without special characters.
 * Multimonitor support - not tested after removal of GTK
 * Need to restart weston after a new app installation to see the new app icon in the panel.
 

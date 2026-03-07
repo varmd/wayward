@@ -976,6 +976,29 @@ struct color_scheme DEFAULT_BLUE_COLORS = {
 	{7, 0, 0, }          /* bg:high blue (0), fg:light gray (7)  */
 };
 
+struct color_scheme DEFAULT_GREEN_COLORS = {
+	{
+		{0  ,  0.66, 0,    1}, /* blue */  //Background
+		{0  ,  0.66, 0,    1}, /* green */ //Background
+		{0  ,  0.66, 0,    1}, /* green */
+		{0.66, 0.33, 0,    1}, /* orange (nicer than muddy yellow) */
+		{0  ,  0  ,  0.66, 1}, /* blue */
+		{0.66, 0  ,  0.66, 1}, /* magenta */
+		{0,    0.66, 0.66, 1}, /* cyan */
+		{1,    1,    1,    1},  /* white */
+		{0.22, 0.33, 0.33, 1}, /* dark grey */
+		{1,    0.33, 0.33, 1}, /* high red */
+		{0.33, 1,    0.33, 1}, /* high green */
+		{1,    1,    0.33, 1}, /* high yellow */
+		{0.33, 0.33, 1,    1}, /* high blue */
+		{1,    0.33, 1,    1}, /* high magenta */
+		{0.33, 1,    1,    1}, /* high cyan */
+		{1,    1,    1,    1}  /* white */
+	},
+	1,                   /* black border */
+	{7, 0, 0, }          /* bg:high blue (0), fg:light gray (7)  */
+};
+
 
 static void
 terminal_set_color(struct terminal *terminal, cairo_t *cr, int index)
@@ -2826,6 +2849,9 @@ menu_func(void *data, struct input *input, int index)
 	case 5:
 		terminal_change_color(terminal, &DEFAULT_BLUE_COLORS);
 		break;
+	case 6:
+		terminal_change_color(terminal, &DEFAULT_GREEN_COLORS);
+		break;
 	}
 }
 
@@ -2834,7 +2860,7 @@ show_menu(struct terminal *terminal, struct input *input, uint32_t time)
 {
 	int32_t x, y;
 	static const char *entries[] = {
-		"Open Terminal", "Copy", "Paste", "Minimize", "Red", "Blue"
+		"Open Terminal", "Copy", "Paste", "Minimize", "Red", "Blue", "Green"
 	};
 
 	input_get_position(input, &x, &y);

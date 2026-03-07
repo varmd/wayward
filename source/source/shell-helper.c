@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014 Collabora Ltd.
- * Copyright (C) 2017-2021 varmd - https://github.com/varmd
+ * Copyright (C) 2017-2025 varmd - https://github.com/varmd
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -20,6 +20,8 @@
  * Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
  */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <assert.h>
 #include <fcntl.h>
@@ -35,11 +37,14 @@
 
 #include <libweston/libweston.h>
 #include <libweston/desktop.h>
+#include <libweston/shell-utils.h>
 #include <linux/input.h>
 
 #include <gbm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+
+#include <errno.h>
 
 #include "weston-desktop-shell-client-protocol.h"
 #include "shell-helper-server-protocol.h"
@@ -67,7 +72,6 @@ enum exposay_layout_state {
 	EXPOSAY_LAYOUT_OVERVIEW, /* show all windows */
 	EXPOSAY_LAYOUT_ANIMATE_TO_OVERVIEW, /* in transition to all windows */
 };
-
 
 struct exposay_output {
 	int num_surfaces;
@@ -121,6 +125,7 @@ struct exposay {
 
 	struct weston_keyboard_grab grab_kbd;
 	struct weston_pointer_grab grab_ptr;
+	struct weston_touch_grab grab_touch;
 
 	enum exposay_target_state state_target;
 	enum exposay_layout_state state_cur;
@@ -138,7 +143,7 @@ struct exposay {
 //TODO adapt to multiple monitors
 //Weston 11 removed exposays so need to set global for now
 struct exposay_output global_eoutput;
-struct exposay global_exposay = {0};
+struct exposay global_exposay = {};
 
 static void exposay_set_state(struct desktop_shell *shell,
                               enum exposay_target_state state,
@@ -147,15 +152,12 @@ static void exposay_check_state(struct desktop_shell *shell, struct weston_seat 
 static void exposay_remove_mask();
 
 //Copied from desktop-shell/shell.h
-
-
 struct focus_surface {
 	struct weston_curtain *curtain;
 };
 
 enum animation_type {
 	ANIMATION_NONE,
-
 	ANIMATION_ZOOM,
 	ANIMATION_FADE,
 	ANIMATION_DIM_LAYER,
@@ -191,6 +193,7 @@ struct shell_output {
 	struct weston_surface *background_surface;
 	struct weston_view *background_view;
 	struct wl_listener background_surface_listener;
+	struct weston_curtain *temporary_curtain;
 };
 
 struct weston_desktop;
@@ -257,6 +260,8 @@ struct desktop_shell {
 	} fade;
 
 	bool allow_zap;
+	bool disallow_output_changed_move;
+
 	uint32_t binding_modifier;
 	enum animation_type win_animation_type;
 	enum animation_type win_close_animation_type;
@@ -297,6 +302,38 @@ enum shm_command {
   SHM_BRIGHTNESS_DOWN,
 };
 
+struct wl_seat *panel_seat;
+struct weston_seat *global_weston_seat = NULL;
+struct weston_keyboard *panel_keyboard = NULL;
+struct desktop_shell *global_desktop_shell = NULL;
+struct wl_array global_minimized_array = {};
+struct wl_array global_exposay_views_array = {};
+
+struct shell_helper {
+	struct weston_compositor *compositor;
+  struct desktop_shell *shell;
+	struct wl_listener destroy_listener;
+  struct exposay_output eoutput;
+	struct weston_layer *panel_layer;
+	struct weston_layer curtain_layer;
+	struct weston_view *curtain_view;
+	struct weston_view_animation *curtain_animation;
+	uint32_t curtain_show;
+	struct wl_list slide_list;
+
+	struct weston_keyboard *first_keyboard;
+	struct weston_seat     *first_seat;
+	int input_panel_x;
+	int input_panel_y;
+	int last_keymap_fd;
+	int last_keymap_size;
+
+	struct weston_view *input_panel_view;
+};
+
+#include "clients/wvkbd/keymap.mobintl.h"
+#include "os-compatibility.h"
+
 static void setup_shm(int shm_command);
 
 struct weston_output *
@@ -322,9 +359,6 @@ weston_layer_entry_remove(struct weston_layer_entry *entry)
 struct weston_view *
 get_default_view(struct weston_surface *surface);
 
-//struct shell_surface *
-//get_shell_surface(struct weston_surface *surface);
-
 struct workspace *
 get_current_workspace(struct desktop_shell *shell);
 
@@ -341,25 +375,7 @@ shell_for_each_layer(struct desktop_shell *shell,
 		     shell_for_each_layer_func_t func,
 void *data);
 
-struct wl_seat *panel_seat;
-struct weston_seat *global_weston_seat = NULL;
-struct weston_keyboard *panel_keyboard = NULL;
-struct desktop_shell *global_desktop_shell = NULL;
-struct wl_array global_minimized_array = {0};
-struct wl_array global_exposay_views_array = {0};
 
-struct shell_helper {
-	struct weston_compositor *compositor;
-  struct desktop_shell *shell;
-	struct wl_listener destroy_listener;
-  struct exposay_output eoutput;
-	struct weston_layer *panel_layer;
-	struct weston_layer curtain_layer;
-	struct weston_view *curtain_view;
-	struct weston_view_animation *curtain_animation;
-	uint32_t curtain_show;
-	struct wl_list slide_list;
-};
 
 //end copied
 
@@ -383,7 +399,7 @@ shell_helper_move_surface(struct wl_client *client,
 	if (!view)
 		return;
 
-  weston_log("Moving..  %d %d \n", x, y);
+  //weston_log("Moving..  %d %d \n", x, y);
 
   if (!weston_surface_is_mapped(surface)) {
     weston_log("Surface unmapped \n", x, y);
@@ -506,7 +522,6 @@ panel_move_initial(
 static void
 configure_panel(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
-//	struct shell_helper *helper = es->committed_private;
 	struct shell_output *sh_output = es->committed_private;
 	struct weston_output *output = sh_output->output;
 	struct weston_view *view;
@@ -521,8 +536,6 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 	if (!weston_surface_is_mapped(es)) {
 	  weston_log("Moving panel configure .. \n", es->height);
 		weston_surface_map(es);
-
-	  weston_log("Mapping panel configure 333 .. \n", es->height);
 		assert(wl_list_empty(&es->views));
 		view = weston_view_create(es);
 		assert(view);
@@ -531,7 +544,7 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 	}
 
   if (wl_list_empty(&view->layer_link.link)) {
-	 weston_view_move_to_layer(view, &shell->panel_layer.view_list);
+	  weston_view_move_to_layer(view, &shell->panel_layer.view_list);
 	}
 
   if(!initial) {
@@ -539,8 +552,6 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
     weston_log("Moving panel configure - initial .. \n");
     panel_move_initial(view, 0, output->height - es->height);
   }
-
-
 }
 
 static void
@@ -678,110 +689,10 @@ slide_back(struct slide *slide)
 
 struct crtc_data {
   uint16_t *r, *g, *b; // gammas
-  //int fd;
-  //uint32_t crtc_id;
-  //drmModeCrtc *crtc;
+  int fd;
+  uint32_t crtc_id;
+  drmModeCrtc *crtc;
 };
-
-/*
-void iterate_fds(struct weston_surface *surface)
-{
-  int ret;
-  int fds[DRM_MAX_MINOR];
-  drmModeRes *fd_res[DRM_MAX_MINOR];
-  int fd_ct = 0;
-
-  weston_log("DRM_MAX_MINOR %15d\n", DRM_MAX_MINOR); // 16
-  for (int fd_idx = 0; fd_idx < DRM_MAX_MINOR; fd_idx++) {
-    fds[fd_idx] = 0;
-    char * filename = NULL;
-    ret = asprintf(&filename, "/dev/dri/card%d", fd_idx);
-    assert(ret != -1);
-    assert(filename);
-
-    int fd = open(filename, "rw");
-    free(filename);
-
-    if (fd < 0) continue;
-    fd_res[fd_ct] = drmModeGetResources(fd);
-    if (!fd_res[fd_ct]) {
-      close(fd);
-      continue;
-    }
-
-    fds[fd_ct] = fd;
-    fd_ct ++;
-
-    //iterate_crtcs(fd, &surface);
-    close(fd);
-  }
-}
-*/
-
-
-void load_gamma(struct weston_surface *surface)
-{
-  int load_fd;
-  //drmModeResPtr res = drmModeGetResources(fd);
-  //weston_log("crtc resource count %15d\n", res->count_crtcs);
-
-  // allocate/init crtc_data
-  struct crtc_data *dat = (struct crtc_data *) malloc(sizeof(struct crtc_data));
-  //dat->fd = fd;
-
-  // open files as necessary
-
-
-	load_fd = -2;
-	load_fd = open("/usr/lib/weston/warm.dat", O_RDONLY);
-	if (load_fd < 0) {
-    weston_log("22222222    %d", load_fd);
-	  return;
-	}
-
-
-  weston_log("gamma size is 15%d  \n", surface->output->gamma_size);
-
-
-
-  dat->r = calloc(surface->output->gamma_size, sizeof(uint16_t));
-  dat->g = calloc(surface->output->gamma_size, sizeof(uint16_t));
-  dat->b = calloc(surface->output->gamma_size, sizeof(uint16_t));
-
-  size_t gamma_size = surface->output->gamma_size;
-  read(load_fd, dat->r, surface->output->gamma_size*sizeof(uint16_t));
-  read(load_fd, dat->g, surface->output->gamma_size*sizeof(uint16_t));
-  read(load_fd, dat->b, surface->output->gamma_size*sizeof(uint16_t));
-  weston_log("read one table\n");
-  for (int gidx = 0; gidx < surface->output->gamma_size; gidx++) {
-    //weston_log("\t\tgamma(%3d) %5d %5d %5d\n", gidx, dat->r[gidx], dat->g[gidx], dat->b[gidx]);
-  }
-  //SET_GAMMA(dat);
-  //surface->output->set_gamma(surface->output, surface->output->gamma_size, dat->r, dat->g, dat->b);
-
-
-  // Iterate through crtcs for this fd/
-  /*
-  for (int crtc_idx = 0; crtc_idx < res->count_crtcs; crtc_idx++) {
-    dat->crtc_id = res->crtcs[crtc_idx];
-    dat->crtc = drmModeGetCrtc(fd, dat->crtc_id);
-    dat->r = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    dat->g = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    dat->b = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    weston_log("\tcrtc id %15d \t size %3d  \n", dat->crtc_id, dat->crtc->gamma_size);
-
-    // Process gamma as desired
-
-
-    weston_log("crtc gotten\n");
-    free(dat->r); free(dat->g); free(dat->b);
-  }
-  */
-  // close files as necessary
-  close(load_fd);
-  // cleanup
-  free(dat);
-}
 
 
 static void
@@ -845,8 +756,6 @@ void terminal_binding(struct weston_keyboard *keyboard, const struct timespec *t
 void browser_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data) {
   setup_shm(SHM_LAUNCH_BROWSER);
 }
-
-
 
 void fullscreen_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data)
 {
@@ -980,9 +889,11 @@ shell_helper_bind_key_panel(struct wl_client *client,
   weston_compositor_add_key_binding(helper->compositor, KEY_L, MODIFIER_SUPER, exposay_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_Z, MODIFIER_SUPER, exposay_binding_nominimized, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_F12, MODIFIER_SUPER, fullscreen_binding, shell);
+
   weston_compositor_add_key_binding(helper->compositor, KEY_MUTE, 0, mute_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEDOWN , 0, volumedown_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_VOLUMEUP , 0, volumeup_binding, shell);
+
   weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSUP, 0, brightnessup_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_BRIGHTNESSDOWN, 0, brightnessdown_binding, shell);
 //////
@@ -995,39 +906,35 @@ shell_helper_bind_key_panel(struct wl_client *client,
 
 }
 
+
 static void
 shell_helper_change_gamma(struct wl_client *client,
 			   struct wl_resource *resource,
-			   struct wl_resource *surface_resource,
+			   struct wl_resource *shell_resource,
                            int32_t reset)
 {
 	struct shell_helper *helper = wl_resource_get_user_data(resource);
-	struct weston_surface *surface = wl_resource_get_user_data(surface_resource);
-
-         int i;
-	uint16_t *red,*green,*blue;
-        uint16_t rgb;
-
-
-	if (!surface->output->set_gamma) {
-    weston_log ("No set gamma \r\n ");
-		return;
-  }
-
-   if(!reset) {
-      weston_log("gamma size is %d  \n", surface->output->gamma_size);
-
-
-    int load_fd;
-  //drmModeResPtr res = drmModeGetResources(fd);
-  //weston_log("crtc resource count %15d\n", res->count_crtcs);
-
-  // allocate/init crtc_data
+  struct desktop_shell *shell = wl_resource_get_user_data(shell_resource);
+  struct shell_output *shell_output = NULL;
+  int gamma_size = 0;
+  drmModeCrtc *crtc;
   struct crtc_data *dat = (struct crtc_data *) malloc(sizeof(struct crtc_data));
-  //dat->fd = fd;
 
-  // open files as necessary
-	load_fd = -2;
+	if(!shell->compositor)
+	  printf("No compositor \n");
+
+
+	struct weston_output *output = get_default_output(helper->compositor);;
+
+  char filename[20];
+  int ret = sprintf(filename, "/dev/dri/card0");
+
+  int fd = open(filename, O_RDWR);
+
+  if (fd < 0)
+    return;
+
+  int load_fd = -2;
 	load_fd = open("/usr/lib/weston/warm.dat", O_RDONLY);
 	if (load_fd < 0) {
     weston_log("22222222    %d", load_fd);
@@ -1035,48 +942,150 @@ shell_helper_change_gamma(struct wl_client *client,
 	}
 
 
-  weston_log("gamma size is 15%d  \n", surface->output->gamma_size);
+	if(fd > 0) {
+
+
+  	drmModeResPtr res = drmModeGetResources(fd);
+    weston_log("crtc resource count %15d\n", res->count_crtcs);
+
+
+    if(!res)
+      return;
 
 
 
-  dat->r = calloc(surface->output->gamma_size, sizeof(uint16_t));
-  dat->g = calloc(surface->output->gamma_size, sizeof(uint16_t));
-  dat->b = calloc(surface->output->gamma_size, sizeof(uint16_t));
+    for (int crtc_idx = 0; crtc_idx < res->count_crtcs; crtc_idx++) {
+      dat->crtc_id = res->crtcs[crtc_idx];
+      dat->crtc = drmModeGetCrtc(fd, dat->crtc_id);
 
-  size_t gamma_size = surface->output->gamma_size;
-  read(load_fd, dat->r, surface->output->gamma_size*sizeof(uint16_t));
-  read(load_fd, dat->g, surface->output->gamma_size*sizeof(uint16_t));
-  read(load_fd, dat->b, surface->output->gamma_size*sizeof(uint16_t));
+      dat->r = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
+      dat->g = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
+      dat->b = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
+#if 0
+      weston_log("\tcrtc id %15d \t size %3d  \n", dat->crtc_id, dat->crtc->gamma_size);
+#endif
+
+      gamma_size = dat->crtc->gamma_size;
+
+      read(load_fd, dat->r, gamma_size * sizeof(uint16_t));
+      read(load_fd, dat->g, gamma_size * sizeof(uint16_t));
+      read(load_fd, dat->b, gamma_size * sizeof(uint16_t));
+
+
+      weston_log("read one table %d \n", crtc_idx);
+      for (int gidx = 0; gidx < gamma_size; gidx++) {
+        weston_log("\t\tgamma(%3d) %5d %5d %5d\n", gidx, dat->r[gidx],
+          dat->g[gidx], dat->b[gidx]);
+      }
+
+      // Process gamma as desired
+      // Does not work
+      	drmModeCrtcSetGamma(fd,
+				 dat->crtc_id,
+				 dat->crtc->gamma_size, dat->r, dat->r, dat->b);
+
+      close(load_fd);
+      load_fd = open("/usr/lib/weston/warm.dat", O_RDONLY);
+
+      free(dat->r); free(dat->g); free(dat->b);
+    }
+
+      #if 0
+		crtc = drmModeGetCrtc(fd, output->crtc->crtc_id);
+  	if (!crtc)
+  		return -1;
+
+
+	  gamma_size = crtc->gamma_size;
+
+	  weston_log ("Gamma size %d  \r\n ", gamma_size);
+	  #endif
+
+	}
+
+	return;
+
+	if(!gamma_size)
+	  return;
+
+	drmModeFreeCrtc(crtc);
+
+  int i;
+	uint16_t *red,*green,*blue;
+  uint16_t rgb;
+
+	wl_list_for_each(shell_output, &shell->output_list, link) {
+  	//new_surface->output = shell_output->output;
+	}
+
+#if 0
+
+
+
+  int ret;
+  int fds[DRM_MAX_MINOR];
+  drmModeRes *fd_res[DRM_MAX_MINOR];
+  int fd_ct = 0;
+
+  weston_log("DRM_MAX_MINOR %15d\n", DRM_MAX_MINOR); // 16
+
+  fds[fd_idx] = 0;
+  char filename[20];
+  ret = sprintf(&filename, "/dev/dri/card0");
+  assert(ret != -1);
+  assert(filename);
+
+  int fd = open(filename, "rw");
+  free(filename);
+
+  if (fd < 0) return;
+  fd_res[fd_ct] = drmModeGetResources(fd);
+  if (!fd_res[fd_ct]) {
+    close(fd);
+    continue;
+  }
+
+   if(!reset) {
+      weston_log("gamma size is %d  \n", shell->output->gamma_size);
+
+
+  int load_fd;
+  drmModeResPtr res = drmModeGetResources(fd);
+  weston_log("crtc resource count %15d\n", res->count_crtcs);
+
+
+
+  // open files as necessary
+	int load_fd = -2;
+	load_fd = open("/usr/lib/weston/warm.dat", O_RDONLY);
+	if (load_fd < 0) {
+    weston_log("22222222    %d", load_fd);
+	  return;
+	}
+
+  dat->r = calloc(output->gamma_size, sizeof(uint16_t));
+  dat->g = calloc(output->gamma_size, sizeof(uint16_t));
+  dat->b = calloc(output->gamma_size, sizeof(uint16_t));
+
+  size_t gamma_size = output->gamma_size;
+  read(load_fd, dat->r, output->gamma_size*sizeof(uint16_t));
+  read(load_fd, dat->g, output->gamma_size*sizeof(uint16_t));
+  read(load_fd, dat->b, output->gamma_size*sizeof(uint16_t));
   weston_log("read one table\n");
-  for (int gidx = 0; gidx < surface->output->gamma_size; gidx++) {
-    weston_log("\t\tgamma(%3d) %5d %5d %5d\n", gidx, dat->r[gidx], dat->g[gidx], dat->b[gidx]);
+  for (int gidx = 0; gidx < output->gamma_size; gidx++) {
+    weston_log("\t\tgamma(%3d) %5d %5d %5d\n", gidx, dat->r[gidx],
+      dat->g[gidx], dat->b[gidx]);
   }
-  //SET_GAMMA(dat);
-  surface->output->set_gamma(surface->output, surface->output->gamma_size, dat->r, dat->g, dat->b);
+  return;
 
 
-  // Iterate through crtcs for this fd/
-  /*
-  for (int crtc_idx = 0; crtc_idx < res->count_crtcs; crtc_idx++) {
-    dat->crtc_id = res->crtcs[crtc_idx];
-    dat->crtc = drmModeGetCrtc(fd, dat->crtc_id);
-    dat->r = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    dat->g = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    dat->b = calloc(dat->crtc->gamma_size, sizeof(uint16_t));
-    weston_log("\tcrtc id %15d \t size %3d  \n", dat->crtc_id, dat->crtc->gamma_size);
 
-    // Process gamma as desired
-
-
-    weston_log("crtc gotten\n");
-    free(dat->r); free(dat->g); free(dat->b);
-  }
-  */
   // close files as necessary
-  close(load_fd);
+
+
   // cleanup
   free(dat);
-  } else {
+
 
 
 		//257   173    96
@@ -1091,7 +1100,7 @@ shell_helper_change_gamma(struct wl_client *client,
 		for (i = 0; i < surface->output->gamma_size; i++) {
 		  red[i] = (uint32_t) 0xffff * (uint32_t) i / (uint32_t) (surface->output->gamma_size - 1);
     }
-    surface->output->set_gamma(surface->output, surface->output->gamma_size, red, red, red);
+    //surface->output->set_gamma(surface->output, surface->output->gamma_size, red, red, red);
           /*
           red[i] = surface->output->gamma_size * _red;
 		  green[i] = surface->output->gamma_size * _green;
@@ -1099,13 +1108,11 @@ shell_helper_change_gamma(struct wl_client *client,
           */
 
 		//rgb = 65536 * 246 + 256 * 227 + 183;
-
-
 		free(red);
 
 
   }
-
+#endif
 
 }
 
@@ -1242,9 +1249,6 @@ shell_helper_curtain(struct wl_client *client,
 	struct weston_surface *surface =
 		wl_resource_get_user_data(surface_resource);
 
-
-
-
 	helper->curtain_show = show;
 
 	if (show) {
@@ -1290,7 +1294,6 @@ shell_helper_curtain(struct wl_client *client,
   */
 }
 
-
 static void
 shell_helper_launch_exposay(struct wl_client *client,
 			   struct wl_resource *resource,
@@ -1308,6 +1311,37 @@ shell_helper_launch_exposay(struct wl_client *client,
 
 }
 
+//input panel
+
+
+static void
+bind_input_panel(struct wl_client *client,
+	      void *data, uint32_t version, uint32_t id)
+{
+	struct desktop_shell *shell = data;
+	struct wl_resource *resource;
+	shell->input_panel.binding = NULL;
+
+
+  shell->input_panel.binding = NULL;
+  #if 0
+
+	resource = wl_resource_create(client,
+				      &zwp_input_panel_v1_interface, 1, id);
+	if (shell->input_panel.binding == NULL) {
+		wl_resource_set_implementation(resource,
+					       &input_panel_implementation,
+					       shell, unbind_input_panel);
+		shell->input_panel.binding = resource;
+		return;
+	}
+
+	wl_resource_post_error(resource, WL_DISPLAY_ERROR_INVALID_OBJECT,
+			       "interface object already bound");
+  #endif
+}
+
+//input panel
 
 static void
 shell_helper_toggle_inhibit(struct wl_client *client,
@@ -1325,7 +1359,6 @@ shell_helper_toggle_inhibit(struct wl_client *client,
   }
 
 }
-
 
 
 static void
@@ -1386,6 +1419,330 @@ shell_helper_move_background_surface(
 
 }
 
+//This is necessary since Weston 13.0 it's not possible to change
+//initial position of the view if it was set on the first? configure
+//So we skip set position here.
+static void
+configure_input_panel(struct weston_surface *es, struct weston_coord_surface new_origin)
+{
+
+	struct shell_helper *helper = es->committed_private;
+//	struct shell_output *sh_output = es->committed_private;
+//	struct weston_output *output = sh_output->output;
+
+	struct weston_view *view;
+  struct weston_coord_global offset;
+	struct desktop_shell *shell = helper->shell;
+	static int initial = 0;
+	int output_height = abs(helper->input_panel_y);
+
+  struct weston_coord_global pos;
+  //TODO
+  //why is this constantly called
+  //weston_log("configure_input_panel %d height .. \n", es->height);
+
+  if(initial)
+    return;
+
+	if (weston_surface_is_mapped(es)) {
+	  return;
+	  weston_log("Input panel mapped %d height .. \n", es->height);
+	  if (wl_list_empty(&view->layer_link.link)) {
+	    weston_log("No Input panel view %d height .. \n", es->height);
+	  }
+	}
+
+	if (!weston_surface_is_mapped(es)) {
+	  weston_log("Moving input panel configure .. \n", es->height);
+		weston_surface_map(es);
+		assert(wl_list_empty(&es->views));
+		view = weston_view_create(es);
+		assert(view);
+		helper->input_panel_view = view;
+		initial = 0;
+
+    if(view->surface) {
+  	  if(view->surface->height > output_height)
+    	  helper->input_panel_y = output_height + 50 - view->surface->height;
+      else
+        helper->input_panel_y = output_height - 50 - view->surface->height;
+    }
+	}
+
+  if (wl_list_empty(&view->layer_link.link)) {
+    //input_panel_layer does not work
+	  weston_view_move_to_layer(view, &shell->panel_layer.view_list);
+	}
+
+
+
+  if(!initial) {
+    initial = 1;
+    weston_log("Moving input_panel configure - initial .. %d %d %d \n", output_height, view->surface->height, helper->input_panel_y);
+    struct weston_coord_global pos;
+    pos.c = weston_coord(0, helper->input_panel_y);
+
+
+  	weston_view_set_position(view, pos);
+  	weston_view_update_transform(view);
+    weston_compositor_schedule_repaint(helper->compositor);
+   // panel_move_initial(view, 0, output->height - es->height);
+  }
+}
+
+static void
+shell_helper_input_panel_surface(
+  struct wl_client   *client,
+  struct wl_resource *resource,
+  struct wl_resource *shell_resource,
+  struct wl_resource *input_panel_surface_resource
+)
+{
+	struct shell_helper *helper = wl_resource_get_user_data(resource);
+	struct desktop_shell *shell = wl_resource_get_user_data(shell_resource);
+	struct weston_surface *new_surface =
+		wl_resource_get_user_data(input_panel_surface_resource);
+
+
+	if (new_surface->committed) {
+	  printf("Surface role exists \n");
+		wl_resource_post_error(input_panel_surface_resource,
+				       WL_DISPLAY_ERROR_INVALID_OBJECT,
+				       "surface role already assigned");
+    exit(1);
+		return;
+	}
+
+  printf("Surface role does not exist \n");
+//  weston_log("Surface role does not exist \n");
+	new_surface->committed = configure_input_panel;
+	new_surface->committed_private = helper;
+
+	printf("Added input panel surface 2 \n");
+
+	if(!helper->shell) {
+	  printf("No helper shell \n");
+	  helper->shell = shell;
+	}
+
+//	wl_list_for_each(shell_output, &helper->shell->output_list, link) {
+  	//new_surface->output = shell_output->output;
+
+//	}
+
+	new_surface->output = weston_shell_utils_get_default_output(shell->compositor);;
+	helper->input_panel_x = 0;
+	helper->input_panel_y = - new_surface->output->height;
+
+
+	printf("Added input panel surface %d - %d \n", new_surface->output->height, new_surface->height);
+
+
+#if 0
+
+
+  sh_output = find_shell_output_from_weston_output(shell, background_surface->output);
+  if (!sh_output->background_surface) {
+    return;
+  }
+
+
+  weston_view_move_to_layer(existing_view, &shell->input_panel_layer.view_list);
+
+
+	wl_list_for_each_safe(new_view, next, &input_panel_surface->views, surface_link)
+		weston_view_destroy(new_view);
+	new_view = weston_view_create(background_surface);
+
+
+#endif
+}
+
+static void
+shell_helper_toggle_input_panel(struct wl_client *client,
+        struct wl_resource *resource,
+        struct wl_resource *shell_resource,
+			  int show)
+{
+
+	struct shell_helper *helper = wl_resource_get_user_data(resource);
+	struct desktop_shell *shell = wl_resource_get_user_data(shell_resource);
+	struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+
+  printf("Shell helper toggle input panel %d \n", show);
+
+	if(!helper->first_keyboard)
+	  return;
+
+  if(show) {
+    // shell->showing_input_panels = true;
+   // weston_layer_set_position(&shell->input_panel_layer,
+	//	    WESTON_LAYER_POSITION_TOP_UI);
+    weston_log("Moving input_panel %p \n", helper->input_panel_view);
+
+    if(helper->input_panel_view) {
+      weston_log("Moving input_panel \n");
+      struct weston_coord_global pos;
+      pos.c = weston_coord(0, helper->input_panel_y);
+    	weston_view_set_position(helper->input_panel_view, pos);
+    	weston_view_update_transform(helper->input_panel_view);
+
+      weston_compositor_schedule_repaint(helper->compositor);
+    }
+
+
+  } else {
+    //weston_layer_unset_position(&shell->input_panel_layer);
+    if(helper->input_panel_view) {
+      weston_log("Hiding input_panel \n");
+      struct weston_coord_global pos;
+      pos.c = weston_coord(0, -10000);
+    	weston_view_set_position(helper->input_panel_view, pos);
+    	weston_view_update_transform(helper->input_panel_view);
+      weston_compositor_schedule_repaint(helper->compositor);
+    }
+  }
+
+}
+
+static void
+shell_helper_input_key(struct wl_client *client,
+        struct wl_resource *resource,
+        struct wl_resource *shell_resource,
+			  uint32_t key)
+{
+
+	struct shell_helper *helper = wl_resource_get_user_data(resource);
+	struct desktop_shell *shell = wl_resource_get_user_data(shell_resource);
+	struct timespec ts;
+	static struct wl_resource *_resource;
+	static struct wl_resource *last_resource = NULL;
+	static int is_shift = 0;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  static uint32_t serial;
+  struct wl_display *display = NULL;
+
+
+	if(!helper->first_keyboard)
+	  return;
+
+
+
+	wl_resource_for_each(_resource, &helper->first_keyboard->focus_resource_list) {
+	  	printf("shell_helper_input_key Resource - %p \n", _resource);
+	  	if(last_resource != _resource && helper->last_keymap_fd > 0) {
+    	  	printf("Resource - %p Keymap %d \n", _resource, helper->last_keymap_fd);
+
+          wl_keyboard_send_keymap(_resource,
+        				WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1,
+        				helper->last_keymap_fd,
+        				helper->last_keymap_size);
+
+          last_resource = _resource;
+	  	}
+  }
+
+
+  if(key == KEY_LEFTSHIFT) {
+    display = helper->first_keyboard->seat->compositor->wl_display;
+    serial = wl_display_next_serial(display);
+    is_shift = 1;
+    return;
+  }
+
+  if(is_shift) {
+  	wl_resource_for_each(_resource, &helper->first_keyboard->focus_resource_list) {
+	  	printf("Modifier is sent - %p \n", _resource);
+	  	wl_keyboard_send_modifiers(_resource,
+	  	         serial,
+						   1,
+						   0,
+						   0,
+						   0);
+
+
+      }
+  }
+
+
+	weston_keyboard_send_key(helper->first_keyboard, &ts, key, WL_KEYBOARD_KEY_STATE_PRESSED);
+	weston_keyboard_send_key(helper->first_keyboard, &ts, key, WL_KEYBOARD_KEY_STATE_RELEASED);
+
+  if(is_shift) {
+  	wl_resource_for_each(_resource, &helper->first_keyboard->focus_resource_list) {
+	  	printf("Modifier resource - %p \n", _resource);
+	  	wl_keyboard_send_modifiers(_resource,
+	  	         serial,
+						   0,
+						   0,
+						   0,
+						   0);
+      }
+    is_shift = 0;
+
+  }
+
+}
+
+static void
+shell_helper_input_keymap(struct wl_client *client,
+        struct wl_resource *resource,
+        struct wl_resource *shell_resource,
+        int fd,
+        size_t size
+			  )
+{
+
+	struct shell_helper *helper = wl_resource_get_user_data(resource);
+	struct desktop_shell *shell = wl_resource_get_user_data(shell_resource);
+	struct wl_resource *_resource;
+	struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  char *map_str;
+  int keymap_index = fd;
+
+
+   if (keymap_index == -1) {
+        fprintf(stderr, "No such keymap defined: \n");
+        exit(9);
+    }
+    const char *keymap_template = keymaps[keymap_index];
+    size_t keymap_size = strlen(keymap_template) + 64;
+    char *keymap_str = malloc(keymap_size);
+    sprintf(keymap_str, keymap_template, 0, 0);
+
+    keymap_size = strlen(keymap_str);
+    int keymap_fd = os_create_anonymous_file(keymap_size);
+    if (keymap_fd < 0) {
+        printf("could not create keymap fd\n");
+    }
+    void *ptr = mmap(NULL, keymap_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                     keymap_fd, 0);
+    if (ptr == (void *)-1) {
+        printf("could not map keymap data\n");
+        exit(1);
+    }
+
+    printf("Keymap %d %d %d \n", fd, keymap_fd, keymap_size);
+    strcpy(ptr, keymap_str);
+
+  	wl_resource_for_each(_resource, &helper->first_keyboard->focus_resource_list) {
+  	  	printf("Resource - %p \n", _resource);
+      wl_keyboard_send_keymap(_resource,
+    	  WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1,
+    		keymap_fd,
+    		keymap_size);
+
+     helper->last_keymap_fd   = keymap_fd;
+     helper->last_keymap_size = keymap_size;
+   }
+
+   free((void *)keymap_str);
+
+}
+
+
 static const struct shell_helper_interface helper_implementation = {
 	shell_helper_move_surface,
 	shell_helper_add_surface_to_layer,
@@ -1398,7 +1755,10 @@ static const struct shell_helper_interface helper_implementation = {
 	shell_helper_curtain,
   shell_helper_launch_exposay,
   shell_helper_toggle_inhibit,
-  shell_helper_move_background_surface
+  shell_helper_input_panel_surface,
+  shell_helper_toggle_input_panel,
+  shell_helper_input_key,
+  shell_helper_input_keymap
 };
 
 static void
@@ -1406,11 +1766,21 @@ bind_helper(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct shell_helper *helper = data;
 	struct wl_resource *resource;
+	static int bind = 0;
+
+  printf("Binding helper \n");
 
 	resource = wl_resource_create(client, &shell_helper_interface, 1, id);
-	if (resource)
+	if (resource && !bind) {
 		wl_resource_set_implementation(resource, &helper_implementation,
 					       helper, NULL);
+    bind = 1;
+    return;
+  }
+
+	wl_resource_post_error(resource, WL_DISPLAY_ERROR_INVALID_OBJECT,
+			       "permission to bind shell_helper denied");
+
 }
 
 static void
@@ -1469,6 +1839,9 @@ wet_module_init(struct weston_compositor *ec,
 	helper->panel_layer = NULL;
 	helper->curtain_view = NULL;
 	helper->curtain_show = 0;
+	helper->first_keyboard = NULL;
+
+	struct weston_output *output = get_default_output(helper->compositor);;
 
   struct weston_seat *seat;
 
@@ -1479,6 +1852,8 @@ wet_module_init(struct weston_compositor *ec,
         global_weston_seat = seat;
 				printf("Found keyboard and seat \n");
 				weston_log("Found keyboard and seat \n");
+				helper->first_keyboard = keyboard;
+				helper->first_seat = seat;
       }  else {
         printf("Not found keyboard and seat \n");
         weston_log("Not found keyboard and seat \n");
@@ -1639,6 +2014,9 @@ exposay_close_app(struct desktop_shell *shell)
   struct weston_layer_entry *new_layer_link;
   struct exposay_surface *esurface = global_exposay.focus_current;
 
+  struct weston_desktop_surface *desktop_surface =
+  	  weston_surface_get_desktop_surface(esurface->view->surface);
+
   if(!global_exposay.focus_current) {
     return;
   }
@@ -1655,7 +2033,9 @@ exposay_close_app(struct desktop_shell *shell)
   wl_list_remove(&esurface->link);
   weston_view_unmap(esurface->view);
 
-	kill(pid, SIGKILL);
+  weston_desktop_surface_close(desktop_surface);
+
+//	kill(pid, SIGKILL);
   free(esurface);
 }
 
@@ -1781,7 +2161,7 @@ exposay_remove_mask() {
   //Figure out how to save mask_surface between exposays
     if(global_exposay.mask_surface) {
       weston_layer_entry_remove(&global_exposay.mask_view->layer_link);
-      weston_view_damage_below(global_exposay.mask_view);
+      //weston_view_damage_below(global_exposay.mask_view);
       weston_view_destroy(global_exposay.mask_view);
       weston_surface_unref(global_exposay.mask_surface);
 
@@ -2002,6 +2382,101 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output,
 	return EXPOSAY_LAYOUT_ANIMATE_TO_OVERVIEW;
 }
 
+
+/*
+ * touch_grab_interface
+ */
+
+static void
+exposay_touch_grab_down(struct weston_touch_grab *touch_grab,
+		     const struct timespec *time,
+		     int touch_id, struct weston_coord_global pos)
+{
+	struct desktop_shell *shell = global_exposay.shell;
+	struct weston_seat *seat = touch_grab->touch->seat;
+
+	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+
+  exposay_pick(shell,
+	  (int)pos.c.x,
+	  (int)pos.c.y
+	);
+
+
+  if (1) {
+	  exposay_activate(shell);
+    exposay_set_state(shell, EXPOSAY_TARGET_SWITCH, seat);
+  } //TODO close with two fingers ?
+  else if ( touch_grab->touch->num_tp == 0 ) {
+    exposay_set_state(shell, EXPOSAY_TARGET_CLOSE, seat);
+    exposay_set_state(shell, EXPOSAY_TARGET_CANCEL, seat);
+    exposay_set_state(shell, EXPOSAY_TARGET_OVERVIEW, seat);
+  }
+}
+
+static void
+exposay_touch_grab_up(struct weston_touch_grab *touch_grab,
+		   const struct timespec *time, int touch_id)
+{
+//	struct kiosk_shell_grab *shgrab =
+//		container_of(touch_grab, struct kiosk_shell_grab, touch_grab);
+  struct desktop_shell *shell = global_exposay.shell;
+
+	if (touch_grab->touch->num_tp == 0)
+    weston_touch_end_grab(touch_grab->touch);
+}
+
+static void
+exposay_touch_grab_motion(struct weston_touch_grab *touch_grab,
+		       const struct timespec *time, int touch_id,
+		       struct weston_coord_global unused)
+{
+#if 0
+	struct kiosk_shell_grab *shgrab =
+		container_of(touch_grab, struct kiosk_shell_grab, touch_grab);
+	struct weston_touch *touch = touch_grab->touch;
+	struct kiosk_shell_surface *shsurf = shgrab->shsurf;
+	struct weston_surface *surface;
+	struct weston_coord_global pos;
+
+	if (!shsurf || !shgrab->active)
+		return;
+
+	surface = weston_desktop_surface_get_surface(shsurf->desktop_surface);
+
+	pos = weston_coord_global_add(touch->grab_pos, shgrab->delta);
+	pos.c = weston_coord_truncate(pos.c);
+	weston_view_set_position(shsurf->view, pos);
+
+	weston_compositor_schedule_repaint(surface->compositor);
+	#endif
+}
+
+static void
+exposay_touch_grab_frame(struct weston_touch_grab *grab)
+{
+}
+
+static void
+exposay_touch_grab_cancel(struct weston_touch_grab *touch_grab)
+{
+	struct desktop_shell *shell = global_exposay.shell;
+
+	weston_touch_end_grab(touch_grab->touch);
+}
+
+static const struct weston_touch_grab_interface exposay_touch_grab = {
+	exposay_touch_grab_down,
+	exposay_touch_grab_up,
+	exposay_touch_grab_motion,
+	exposay_touch_grab_frame,
+	exposay_touch_grab_cancel,
+};
+
 static void
 exposay_focus(struct weston_pointer_grab *grab)
 {
@@ -2212,7 +2687,6 @@ exposay_cancel(struct weston_keyboard_grab *grab)
 {
 
 	struct desktop_shell *shell =  global_exposay.shell;
-
 	exposay_set_state(shell, EXPOSAY_TARGET_CANCEL, global_exposay.seat);
 
 }
@@ -2278,7 +2752,7 @@ exposay_transition_inactive(struct desktop_shell *shell, int switch_focus, struc
       if ( (*minimized)->surface != current_view->surface) {
         weston_layer_entry_remove(&(*minimized)->layer_link);
         weston_view_geometry_dirty(*minimized);
-        weston_view_damage_below(*minimized);
+
       	weston_view_move_to_layer(*minimized,
 				  &shell->minimized_layer.view_list);
 //        weston_layer_entry_insert(&shell->minimized_layer.view_list, &(*minimized)->layer_link);
@@ -2317,6 +2791,7 @@ exposay_transition_active(struct desktop_shell *shell, int hide_minimized)
 
   struct weston_pointer *pointer = weston_seat_get_pointer(seat);
 	struct weston_keyboard *keyboard = weston_seat_get_keyboard(seat);
+	struct weston_touch *touch = weston_seat_get_touch(seat);
 	struct shell_output *shell_output;
 
 	global_exposay.shell = shell;
@@ -2352,6 +2827,13 @@ exposay_transition_active(struct desktop_shell *shell, int hide_minimized)
 		                          &global_exposay.grab_ptr);
 		weston_pointer_clear_focus(pointer);
 	}
+
+	global_exposay.grab_touch.interface = &exposay_touch_grab;
+
+  if(touch)
+    weston_touch_start_grab(touch, &global_exposay.grab_touch);
+
+
 
 	wl_list_for_each(shell_output, &shell->output_list, link) {
 		enum exposay_layout_state state;
@@ -2430,8 +2912,6 @@ get_current_workspace(struct desktop_shell *shell)
   return &shell->workspace;
 }
 
-
-
 /* Move all fullscreen layers down to the current workspace and hide their
  * black views. The surfaces' state is set to both fullscreen and lowered,
  * and this is reversed when such a surface is re-configured, see
@@ -2464,9 +2944,6 @@ lower_fullscreen_layer(struct desktop_shell *shell,
 		  weston_view_move_to_layer(view, &ws->layer.view_list);
 //		  weston_layer_entry_insert(&ws->layer.view_list, &view->layer_link);
 
-
-		weston_view_damage_below(view);
-		weston_surface_damage(view->surface);
     weston_view_geometry_dirty(view);
     weston_compositor_schedule_repaint(shell->compositor);
 

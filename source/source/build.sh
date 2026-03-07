@@ -1,6 +1,6 @@
 #!/bin/bash
 
-WESTON_VER=14
+WESTON_VER=15
 
 cd `dirname $0`
 
@@ -11,9 +11,10 @@ cd `dirname $0`
 #cd protocol
 #make
 
+mkdir -p o
 
-GTK_CFLAGS="-std=c11 -pthread \
--I/usr/include/libweston-${WESTON_VER}/ \
+WAYWARD_CFLAGS="-std=c11 -pthread \
+-I../../weston-${WESTON_VER}.0.0/include/ \
 -I. \
 -I.. \
 -I../shared/ \
@@ -35,6 +36,20 @@ GTK_LIBS=" -lwayland-client -lpng -lutil \
 
 cd `dirname $0`
 
+  WVKBD_SOURCES="\
+  ./clients/wvkbd/wvkbd.c \
+  ./clients/wvkbd/keyboard.c \
+  ./clients/wvkbd/drw.c \
+  \
+	"
+
+  FLOWER_SOURCES="\
+    clients/flower.c \
+  "
+  KEYBOARD_SOURCES="\
+    clients/keyboard.c \
+  "
+
 
   CLIENT_SOURCES="\
     terminal.c \
@@ -54,6 +69,7 @@ cd `dirname $0`
   gen-protocol/viewporter-protocol.c \
   gen-protocol/pointer-constraints-unstable-v1-protocol.c \
   gen-protocol/relative-pointer-unstable-v1-protocol.c \
+  gen-protocol/single-pixel-buffer-v1-protocol.c \
   gen-protocol/text-cursor-position-protocol.c \
   gen-protocol/weston-desktop-shell-code.c \
   gen-protocol/shell-helper-protocol.c
@@ -80,15 +96,28 @@ cd `dirname $0`
     shell-helper.c \
   "
 
-gcc ${GTK_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o wayward-terminal
+#gcc ${WAYWARD_CFLAGS} ./clients/wvkbd/main.c ${WVKBD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o o/wayward-wvkbd
 
-gcc ${GTK_CFLAGS} ${WAYWARD_SOURCES} ${XXTEA_SOURCES}  \
-   ${WINDOW_SOURCES} ${GTK_LIBS} -lm -o wayward
+#gcc ${WAYWARD_CFLAGS} ${FLOWER_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o o/wayward-flower
+#gcc ${WAYWARD_CFLAGS} ${KEYBOARD_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o o/wayward-keyboard
 
-gcc ${GTK_CFLAGS} xxtea/wayward-pincode.c \
-  ${XXTEA_SOURCES} -o wayward-pincode
+gcc ${WAYWARD_CFLAGS} ${CLIENT_SOURCES} ${WINDOW_SOURCES} ${GTK_LIBS} -lm  -o o/wayward-terminal
 
-gcc -shared  ${GTK_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/ -lm -lweston-$WESTON_VER -o shell_helper.so -fPIC gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c shell-helper.c
+gcc -fzero-init-padding-bits=unions ${WAYWARD_CFLAGS} ${WAYWARD_SOURCES} ${XXTEA_SOURCES}  \
+   ${WINDOW_SOURCES} ${WVKBD_SOURCES} ${GTK_LIBS} -lm -o o/wayward
+
+gcc ${WAYWARD_CFLAGS} xxtea/wayward-pincode.c \
+  ${XXTEA_SOURCES} -o o/wayward-pincode
+
+WESTON_LIB="-lweston-$WESTON_VER"
+WESTON_LIB="-L../../weston-${WESTON_VER}.0.0/build/libweston/ -l:libweston-${WESTON_VER}.so"
+
+#ls -la ../../weston-${WESTON_VER}.0.0/build/libweston/libweston-${WESTON_VER}.so
+
+gcc -fzero-init-padding-bits=unions -fPIC -shared  ${WAYWARD_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/  -lm ${WESTON_LIB} -o shell_helper.so \
+   gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c \
+   ../shared/os-compatibility.c \
+   shell-helper.c -o o/shell_helper.so
 
 
 echo OK!

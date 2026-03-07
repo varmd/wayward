@@ -77,6 +77,9 @@ display_get_cairo_device(struct display *display);
 struct wl_compositor *
 display_get_compositor(struct display *display);
 
+struct wp_single_pixel_buffer_manager_v1 *
+display_get_single_pixel_buffer_manager(struct display *display);
+
 struct output *
 display_get_output(struct display *display);
 
@@ -540,6 +543,9 @@ widget_cairo_create(struct widget *widget);
 
 struct wl_surface *
 widget_get_wl_surface(struct widget *widget);
+
+void
+widget_surface_flush(struct widget *widget);
 
 uint32_t
 widget_get_last_time(struct widget *widget);

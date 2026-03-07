@@ -1,0 +1,13 @@
+--- a/frontend/weston-screenshooter.c
++++ b/frontend/weston-screenshooter.c
+@@ -192,8 +192,8 @@
+ 					   shooter, bind_shooter);
+ 	weston_compositor_add_key_binding(ec, KEY_S, MODIFIER_SUPER,
+ 					  screenshooter_binding, shooter);
+-	weston_compositor_add_key_binding(ec, KEY_R, MODIFIER_SUPER,
+-					  recorder_binding, shooter);
++	//weston_compositor_add_key_binding(ec, KEY_R, MODIFIER_SUPER,
++	//				  recorder_binding, shooter);
+
+ 	shooter->destroy_listener.notify = screenshooter_destroy;
+ 	wl_signal_add(&ec->destroy_signal, &shooter->destroy_listener);

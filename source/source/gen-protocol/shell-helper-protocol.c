@@ -9,17 +9,23 @@ extern const struct wl_interface wl_seat_interface;
 extern const struct wl_interface wl_surface_interface;
 
 static const struct wl_interface *shell_helper_types[] = {
+  //move_surface
 	&wl_surface_interface,
 	NULL,
 	NULL,
+	//add_surface_to_layer
 	&wl_surface_interface,
 	&wl_surface_interface,
+	//set_panel
 	&wl_surface_interface,
+	//slide_surface
 	&wl_surface_interface,
 	NULL,
 	NULL,
-	&wl_surface_interface,
+	//change_gamma
+	&weston_desktop_shell_interface,
 	NULL,
+	//
 	&wl_surface_interface,
 	&wl_seat_interface,
 	&weston_desktop_shell_interface,
@@ -29,10 +35,22 @@ static const struct wl_interface *shell_helper_types[] = {
 	NULL,
 	&weston_desktop_shell_interface,
 	&wl_seat_interface,
+	//toggle_inhibit
 	&weston_desktop_shell_interface,
 	&wl_seat_interface,
+	//input_panel_surface
 	&weston_desktop_shell_interface,
 	&wl_surface_interface,
+	//toggle_input_panel
+	&weston_desktop_shell_interface,
+	NULL,
+	//input_key
+	&weston_desktop_shell_interface,
+	NULL,
+	//input_keymap
+	&weston_desktop_shell_interface,
+	NULL,
+	NULL,
 };
 
 static const struct wl_message shell_helper_requests[] = {
@@ -47,12 +65,15 @@ static const struct wl_message shell_helper_requests[] = {
 	{ "curtain", "oi", shell_helper_types + 16 },
 	{ "launch_exposay", "oo", shell_helper_types + 18 },
 	{ "toggle_inhibit", "oo", shell_helper_types + 20 },
-	{ "move_background_surface", "oo", shell_helper_types + 22 },
+	{ "input_panel_surface", "oo", shell_helper_types + 22 },
+	{ "toggle_input_panel", "oi", shell_helper_types + 24 },
+	{ "input_key", "oii", shell_helper_types + 26 },
+	{ "input_keymap", "oii", shell_helper_types + 29 }
 };
 
 WL_EXPORT const struct wl_interface shell_helper_interface = {
 	"shell_helper", 1,
-	12, shell_helper_requests,
+	15, shell_helper_requests,
 	0, NULL,
 };
 

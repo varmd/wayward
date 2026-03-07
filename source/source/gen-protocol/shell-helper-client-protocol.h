@@ -14,7 +14,7 @@ extern "C" {
 /**
  * @page page_shell_helper The shell_helper protocol
  * @section page_ifaces_shell_helper Interfaces
- * - @subpage page_iface_shell_helper - 
+ * - @subpage page_iface_shell_helper -
  */
 struct shell_helper;
 struct weston_desktop_shell;
@@ -45,7 +45,10 @@ extern const struct wl_interface shell_helper_interface;
 #define SHELL_HELPER_CURTAIN 8
 #define SHELL_HELPER_LAUNCH_EXPOSAY 9
 #define SHELL_HELPER_TOGGLE_INHIBIT 10
-#define SHELL_HELPER_MOVE_BACKGROUND_SURFACE 11
+#define SHELL_HELPER_INPUT_PANEL_SURFACE 11
+#define SHELL_HELPER_TOGGLE_INPUT_PANEL 12
+#define SHELL_HELPER_INPUT_KEY 13
+#define SHELL_HELPER_INPUT_KEYMAP 14
 
 
 /**
@@ -95,7 +98,19 @@ extern const struct wl_interface shell_helper_interface;
 /**
  * @ingroup iface_shell_helper
  */
-#define SHELL_HELPER_MOVE_BACKGROUND_SURFACE_SINCE_VERSION 1
+#define SHELL_HELPER_INPUT_PANEL_SURFACE_SINCE_VERSION 1
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_TOGGLE_INPUT_PANEL_SINCE_VERSION 1
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_INPUT_KEY_SINCE_VERSION 1
+/**
+ * @ingroup iface_shell_helper
+ */
+#define SHELL_HELPER_INPUT_KEYMAP_SINCE_VERSION 1
 
 /** @ingroup iface_shell_helper */
 static inline void
@@ -168,10 +183,10 @@ shell_helper_slide_surface(struct shell_helper *shell_helper, struct wl_surface 
  * @ingroup iface_shell_helper
  */
 static inline void
-shell_helper_change_gamma(struct shell_helper *shell_helper, struct wl_surface *surface, int32_t reset)
+shell_helper_change_gamma(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, int32_t reset)
 {
 	wl_proxy_marshal((struct wl_proxy *) shell_helper,
-			 SHELL_HELPER_CHANGE_GAMMA, surface, reset);
+			 SHELL_HELPER_CHANGE_GAMMA, shell, reset);
 }
 
 /**
@@ -238,10 +253,40 @@ shell_helper_toggle_inhibit(struct shell_helper *shell_helper, struct weston_des
  * @ingroup iface_shell_helper
  */
 static inline void
-shell_helper_move_background_surface(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, struct wl_surface *background_surface)
+shell_helper_input_panel_surface(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, struct wl_surface *surface)
 {
 	wl_proxy_marshal((struct wl_proxy *) shell_helper,
-			 SHELL_HELPER_MOVE_BACKGROUND_SURFACE, shell, background_surface);
+			 SHELL_HELPER_INPUT_PANEL_SURFACE, shell, surface);
+}
+
+/**
+ * @ingroup iface_shell_helper
+ */
+static inline void
+shell_helper_toggle_input_panel(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, int show)
+{
+	wl_proxy_marshal((struct wl_proxy *) shell_helper,
+			 SHELL_HELPER_TOGGLE_INPUT_PANEL, shell, show);
+}
+
+/**
+ * @ingroup iface_shell_helper
+ */
+static inline void
+shell_helper_input_key(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, uint32_t key)
+{
+	wl_proxy_marshal((struct wl_proxy *) shell_helper,
+			 SHELL_HELPER_INPUT_KEY, shell, key);
+}
+
+/**
+ * @ingroup iface_shell_helper
+ */
+static inline void
+shell_helper_input_keymap(struct shell_helper *shell_helper, struct weston_desktop_shell *shell, int fd, size_t size)
+{
+	wl_proxy_marshal((struct wl_proxy *) shell_helper,
+			 SHELL_HELPER_INPUT_KEYMAP, shell, fd, size);
 }
 
 #ifdef  __cplusplus

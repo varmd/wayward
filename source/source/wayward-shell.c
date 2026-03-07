@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021-2023 varmd - https://github.com/varmd
+ * Copyright © 2021-2026 varmd - https://github.com/varmd
  * Copyright © 2011 Kristian Høgsberg
  * Copyright © 2011 Collabora, Ltd.
  *
@@ -57,251 +57,7 @@
 #include "xxtea/xxtea.h"
 #include "xxtea/base64.h"
 
-
-
-//cairo scale
-//typedef uint64_t gint64;
-
-typedef gint64 gfixed;
-#define GINT_TO_FIXED(x)         ((gfixed) ((x) << 16))
-#define GDOUBLE_TO_FIXED(x)      ((gfixed) ((x) * (1 << 16) + 0.5))
-#define GFIXED_TO_INT(x)         ((x) >> 16)
-#define GFIXED_TO_DOUBLE(x)      (((double) (x)) / (1 << 16))
-#define GFIXED_ROUND_TO_INT(x)   (((x) + (1 << (16-1))) >> 16)
-#define GFIXED_0                 0L
-#define GFIXED_1                 65536L
-#define GFIXED_2                 131072L
-#define gfixed_mul(x, y)         (((x) * (y)) >> 16)
-#define gfixed_div(x, y)         (((x) << 16) / (y))
-
-#include <sys/wait.h>
-#include <linux/input.h>
-#include <libgen.h>
-#include <ctype.h>
-#include <time.h>
-#include <assert.h>
-
-#include <wayland-client.h>
-#include "window.h"
-#include "shared/cairo-util.h"
-#include <libweston/config-parser.h>
-#include "shared/helpers.h"
-#include "shared/xalloc.h"
-#include <libweston/zalloc.h>
-#include "shared/file-util.h"
-#include "shared/timespec-util.h"
-
-#include "weston-desktop-shell-client-protocol.h"
-#include "shell-helper-client-protocol.h"
-
-#include <alsa/asoundlib.h>
-
-#define DEFAULT_CLOCK_FORMAT CLOCK_FORMAT_MINUTES
-#define DEFAULT_SPACING 10
-
-#define WAYWARD_HIDE_X 43371
-#define WAYWARD_NO_MOVE_X -13371
-#define WAYWARD_INITIAL_HEIGHT 82
-#define WAYWARD_PANEL_LEAVE_BUG_Y 47
-
-#define WAYWARD_ICON_SIZE 32
-#define WAYWARD_AUDIO_STEP 3
-
-
-//https://github.com/rev22/svgViewer/blob/master/svgViewer.c
-
-extern char **environ; /* defined by libc */
-struct panel;
-
-enum clock_format {
-	CLOCK_FORMAT_MINUTES,
-	CLOCK_FORMAT_SECONDS,
-	CLOCK_FORMAT_MINUTES_24H,
-	CLOCK_FORMAT_SECONDS_24H,
-	CLOCK_FORMAT_NONE
-};
-
-enum clock_state {
-	CLOCK_SHOWN,
-	SYSTEM_SHOWN,
-	VOLUME_SHOWN,
-	BRIGHTNESS_SHOWN,
-	CLOCK_NONE
-};
-
-struct desktop {
-	struct display *display;
-	struct weston_desktop_shell *shell;
-	struct unlock_dialog *unlock_dialog;
-	struct task unlock_task;
-	struct wl_list outputs;
-
-	int want_panel;
-	enum weston_desktop_shell_panel_position panel_position;
-	enum clock_format clock_format;
-
-	struct window *grab_window;
-	struct widget *grab_widget;
-
-  struct shell_helper *helper;
-  struct wl_seat *seat;
-  struct wl_pointer *pointer;
-  struct wl_keyboard *keyboard;
-
-  snd_mixer_t *mixer_handle;
-  snd_mixer_elem_t *mixer;
-  long min_volume, max_volume;
-
-  long current_volume;
-  double current_volume_percentage;
-
-	bool enable_autohide;
-
-  int current_brightness;
-	bool enable_brightness_ddc;
-	int ddc_i2c_number;
-	bool enable_brightness_ctl;
-	char *brightnessctl_device;
-
-  int panel_height;
-  int panel_spacing;
-  int icon_size;
-  int panel_font_size;
-	int right_icons;
-
-  struct toytimer shm_timer;
-
-  struct panel *panel;
-
-	struct weston_config *config;
-	bool locking;
-
-
-  char *pincode;
-	enum cursor_type grab_cursor;
-
-	int painted;
-
-};
-
-struct surface {
-	void (*configure)(void *data,
-			  struct weston_desktop_shell *desktop_shell,
-			  uint32_t edges, struct window *window,
-			  int32_t width, int32_t height);
-};
-
-struct output;
-
-struct panel_label {
-	struct widget *widget;
-	struct panel *panel;
-
-  int force_x;
-};
-
-struct panel {
-	struct surface base;
-
-	struct output *owner;
-
-
-	struct window *window;
-	struct widget *widget;
-	struct wl_list launcher_list;
-
-	struct wl_surface *wl_surface;
-
-	struct panel_clock *clock;
-	struct panel_clock *battery;
-
-  struct rectangle clock_allocation;
-
-  struct panel_launcher *reboot_launcher;
-  struct panel_launcher *shutdown_launcher;
-
-  struct panel_launcher *volumedown_launcher;
-  struct panel_launcher *volumeup_launcher;
-  struct panel_label *volume_label;
-
-  struct panel_launcher *brightnessdown_launcher;
-  struct panel_launcher *brightnessup_launcher;
-  struct panel_label *brightness_label;
-
-	int painted;
-	int initial;
-	int allocation_set;
-	enum weston_desktop_shell_panel_position panel_position;
-	enum clock_format clock_format;
-  enum clock_state clock_state;
-
-	uint32_t color;
-
-	struct desktop *desktop;
-};
-
-struct background {
-	struct surface base;
-	struct output *owner;
-
-	struct window *window;
-	struct widget *widget;
-	int painted;
-
-	char *image;
-	int type;
-	uint32_t color;
-};
-
-struct output {
-	struct wl_output *output;
-	uint32_t server_output_id;
-	struct wl_list link;
-
-	int x;
-	int y;
-	struct panel *panel;
-	struct background *background;
-};
-
-struct panel_launcher {
-	struct widget *widget;
-	struct panel *panel;
-	cairo_surface_t *icon;
-	int focused, pressed, toggled;
-  int force_x;
-  int initial_x;
-  int offset_right;
-
-  char *path;
-	struct wl_list link;
-	struct wl_array envp;
-	struct wl_array argv;
-  void (*function)();
-};
-
-struct panel_clock {
-	struct widget *widget;
-	struct panel *panel;
-	struct toytimer timer;
-	char *format_string;
-	time_t refresh_timer;
-
-  int force_x;
-};
-
-struct unlock_dialog {
-	struct window *window;
-	struct widget *widget;
-	struct widget *button;
-	int button_focused;
-	int closing;
-	int keys_entered;
-
-	char pincode[7];
-	struct desktop *desktop;
-};
-
+#include "wayward-shell.h"
 
 //wayward shell
 static struct desktop *global_desktop = NULL;
@@ -365,11 +121,10 @@ static const char keycode_to_vkey[] =
     'K',                 /* KEY_K			37 */
     'L',                 /* KEY_L			38 */
     ';',                 /* KEY_SEMICOLON		39 */
-    0,                 /* KEY_APOSTROPHE		40 */
-    0,                 /* KEY_GRAVE		41 */
-    0,                 /* KEY_LEFTSHIFT		42 */
-
-    0,                 /* KEY_BACKSLASH		43 */
+    0,                   /* KEY_APOSTROPHE		40 */
+    0,                   /* KEY_GRAVE		41 */
+    0,                   /* KEY_LEFTSHIFT		42 */
+    0,                   /* KEY_BACKSLASH		43 */
     'Z',                 /* KEY_Z			44 */
     'X',                 /* KEY_X			45 */
     'C',                 /* KEY_C			46 */
@@ -410,6 +165,9 @@ enum shm_command {
   SHM_BRIGHTNESS_UP,
   SHM_BRIGHTNESS_DOWN,
 };
+
+static void check_desktop_ready(struct window *window);
+
 static void panel_add_battery(struct panel *panel);
 
 static void launch_volume(struct panel_launcher *launcher);
@@ -419,6 +177,21 @@ void wayland_pointer_leave_cb(void *data, struct wl_pointer *pointer, uint32_t s
 
 static void
 panel_add_launchers(struct panel *panel, struct desktop *desktop);
+
+static void log_message(const char *format, ...) {
+    FILE *f = fopen("/tmp/wayward.log", "a");
+    if (f == NULL) {
+        return; // Handle error
+    }
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(f, format, args);
+    va_end(args);
+
+    fclose(f);
+}
+
 
 static int xxtea_pincode_valid(char *pin_keyb64, char *pincode) {
 
@@ -467,22 +240,6 @@ is_desktop_painted(struct desktop *desktop)
 	}
 
 	return 1;
-}
-
-static void
-check_desktop_ready(struct window *window)
-{
-	struct display *display;
-	struct desktop *desktop;
-
-	display = window_get_display(window);
-	desktop = display_get_user_data(display);
-
-	if (!desktop->painted && is_desktop_painted(desktop)) {
-		desktop->painted = 1;
-
-		weston_desktop_shell_desktop_ready(desktop->shell);
-	}
 }
 
 static void clock_hide(struct panel_clock *clock) {
@@ -537,10 +294,6 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 	cairo_t *cr;
 //	int image_height = cairo_image_surface_get_height(launcher->icon) / 2;
 	int image_height = launcher->panel->desktop->icon_size / 2;
-
-//  if(launcher->force_x == WAYWARD_HIDE_X) {
-//    return;
-//  }
 
 	cr = widget_cairo_create(launcher->panel->widget);
 
@@ -827,9 +580,9 @@ panel_launcher_touch_up_handler(struct widget *widget, struct input *input,
 	struct panel_launcher *launcher;
 
 	launcher = widget_get_user_data(widget);
-	launcher->focused = 0;
 	widget_schedule_redraw(widget);
 	panel_launcher_activate(launcher);
+	launcher->focused = 0;
 }
 
 
@@ -1000,7 +753,7 @@ panel_resize_handler(struct widget *widget,
     }
   }
 
-  printf("pad_h %d %d \n", height, pad_h);
+  //printf("pad_h %d %d \n", height, pad_h);
 
   panel->desktop->right_icons = right_icons;
 //  pad_h = 0;
@@ -1029,11 +782,8 @@ panel_resize_handler(struct widget *widget,
 	else /* CLOCK_FORMAT_MINUTES and 24H versions */
 		w = 220;
 
-//	if (horizontal)
-		x = width - w;
-//	else
-//		y = height - (h = panel->desktop->panel_spacing * 3);
 
+	x = width - w;
 
 	if (panel->clock) {
 
@@ -1158,7 +908,7 @@ panel_create(struct desktop *desktop, struct output *output)
 {
 	struct panel *panel;
 	struct weston_config_section *s;
-  struct rectangle null_allocation = {0};
+  struct rectangle null_allocation = {};
 
 	panel = xzalloc(sizeof *panel);
 
@@ -1410,22 +1160,6 @@ static cairo_surface_t* cairo_image_surface_create_from_svg ( const char* filena
     free(img_pixels);
     return surface;
 
-
-               /*
-cairo_t *cr = cairo_create ( surface );
-cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1);
-		cairo_mask_surface(cr, surface,
-				   32, 32);
-cairo_destroy ( cr );
-
-*/
-
-    status = cairo_surface_status(surface);
-    if (status == CAIRO_STATUS_SUCCESS) {
-      return surface;
-    }
-    return NULL;
-
 }
 
 
@@ -1494,7 +1228,7 @@ static struct panel_launcher *panel_add_launcher(struct panel *panel,
 	launcher->path = xstrdup(path);
 
   if(initial_x) {
-    printf("Launcher initial X is %d \n", initial_x);
+    //printf("Launcher initial X is %d \n", initial_x);
     launcher->initial_x = initial_x;
   } else {
     launcher->initial_x = 0;
@@ -1588,89 +1322,139 @@ enum {
 };
 
 static void
+bg_buffer_release(void *data, struct wl_buffer *buffer)
+{
+	wl_buffer_destroy(buffer);
+}
+
+static const struct wl_buffer_listener bg_buffer_listener = {
+	bg_buffer_release
+};
+
+
+static void
 background_draw(struct widget *widget, void *data)
 {
 	struct background *background = data;
-	cairo_surface_t *surface, *image;
-	cairo_pattern_t *pattern;
-	cairo_matrix_t matrix;
-	cairo_t *cr;
-	double im_w, im_h;
-	double sx, sy, s;
-	double tx, ty;
-	struct rectangle allocation;
 
-	surface = window_get_surface(background->window);
+	if (!background->image && background->color) {
+		struct display *display = window_get_display(background->window);
+		struct wp_single_pixel_buffer_manager_v1 *sp_manager;
+		struct wl_surface *wl_surface;
+		struct wl_buffer *wl_buffer;
+		uint32_t r8, g8, b8;
+		uint32_t r32, g32, b32;
 
-	cr = widget_cairo_create(background->widget);
-	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-	if (background->color == 0)
-		cairo_set_source_rgba(cr, 0.0, 0.0, 0.2, 1.0);
-	else
-		set_hex_color(cr, background->color);
-	cairo_paint(cr);
+		/* Single pixel buffer must use scale 1 */
+		window_set_buffer_scale(background->window, 1);
 
-	widget_get_allocation(widget, &allocation);
-	image = NULL;
-	if (background->image)
-		image = load_cairo_surface(background->image);
-	else if (background->color == 0) {
-		char *name = file_name_with_datadir("pattern.png");
+		sp_manager = display_get_single_pixel_buffer_manager(display);
+		assert(sp_manager);
+		wl_surface = widget_get_wl_surface(background->widget);
+		assert(wl_surface);
 
-		image = load_cairo_surface(name);
-		free(name);
+		r8 = (background->color >> 16) & 0xff;
+		g8 = (background->color >>  8) & 0xff;
+		b8 = (background->color >>  0) & 0xff;
+
+		r32 = r8 << 24 | r8 << 16 | r8 << 8 | r8;
+		g32 = g8 << 24 | g8 << 16 | g8 << 8 | g8;
+		b32 = b8 << 24 | b8 << 16 | b8 << 8 | b8;
+
+		wl_buffer =
+			wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(sp_manager,
+										 r32,
+										 g32,
+										 b32,
+										 0xffffffff);
+		assert(wl_buffer);
+
+		wl_surface_attach(wl_surface, wl_buffer, 0, 0);
+		wl_buffer_add_listener(wl_buffer, &bg_buffer_listener, NULL);
+		widget_surface_flush(widget);
+	} else {
+
+  	cairo_surface_t *surface, *image;
+  	cairo_pattern_t *pattern;
+  	cairo_matrix_t matrix;
+  	cairo_t *cr;
+  	double im_w, im_h;
+  	double sx, sy, s;
+  	double tx, ty;
+  	struct rectangle allocation;
+
+  	surface = window_get_surface(background->window);
+
+  	cr = widget_cairo_create(background->widget);
+  	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  	if (background->color == 0)
+  		cairo_set_source_rgba(cr, 0.0, 0.0, 0.2, 1.0);
+  	else
+  		set_hex_color(cr, background->color);
+  	cairo_paint(cr);
+
+  	widget_get_allocation(widget, &allocation);
+  	image = NULL;
+  	if (background->image)
+  		image = load_cairo_surface(background->image);
+  	else if (background->color == 0) {
+  		char *name = file_name_with_datadir("pattern.png");
+
+  		image = load_cairo_surface(name);
+  		free(name);
+  	}
+
+  	if (image && background->type != -1) {
+  		im_w = cairo_image_surface_get_width(image);
+  		im_h = cairo_image_surface_get_height(image);
+  		sx = im_w / allocation.width;
+  		sy = im_h / allocation.height;
+
+  		pattern = cairo_pattern_create_for_surface(image);
+
+  		switch (background->type) {
+  		case BACKGROUND_SCALE:
+  			cairo_matrix_init_scale(&matrix, sx, sy);
+  			cairo_pattern_set_matrix(pattern, &matrix);
+  			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_PAD);
+  			break;
+  		case BACKGROUND_SCALE_CROP:
+  			s = (sx < sy) ? sx : sy;
+  			/* align center */
+  			tx = (im_w - s * allocation.width) * 0.5;
+  			ty = (im_h - s * allocation.height) * 0.5;
+  			cairo_matrix_init_translate(&matrix, tx, ty);
+  			cairo_matrix_scale(&matrix, s, s);
+  			cairo_pattern_set_matrix(pattern, &matrix);
+  			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_PAD);
+  			break;
+  		case BACKGROUND_TILE:
+  			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
+  			break;
+  		case BACKGROUND_CENTERED:
+  			s = (sx < sy) ? sx : sy;
+  			if (s < 1.0)
+  				s = 1.0;
+
+  			/* align center */
+  			tx = (im_w - s * allocation.width) * 0.5;
+  			ty = (im_h - s * allocation.height) * 0.5;
+
+  			cairo_matrix_init_translate(&matrix, tx, ty);
+  			cairo_matrix_scale(&matrix, s, s);
+  			cairo_pattern_set_matrix(pattern, &matrix);
+  			break;
+  		}
+
+  		cairo_set_source(cr, pattern);
+  		cairo_pattern_destroy (pattern);
+  		cairo_surface_destroy(image);
+  		cairo_mask(cr, pattern);
+  	}
+
+  	cairo_destroy(cr);
+  	cairo_surface_destroy(surface);
 	}
-
-	if (image && background->type != -1) {
-		im_w = cairo_image_surface_get_width(image);
-		im_h = cairo_image_surface_get_height(image);
-		sx = im_w / allocation.width;
-		sy = im_h / allocation.height;
-
-		pattern = cairo_pattern_create_for_surface(image);
-
-		switch (background->type) {
-		case BACKGROUND_SCALE:
-			cairo_matrix_init_scale(&matrix, sx, sy);
-			cairo_pattern_set_matrix(pattern, &matrix);
-			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_PAD);
-			break;
-		case BACKGROUND_SCALE_CROP:
-			s = (sx < sy) ? sx : sy;
-			/* align center */
-			tx = (im_w - s * allocation.width) * 0.5;
-			ty = (im_h - s * allocation.height) * 0.5;
-			cairo_matrix_init_translate(&matrix, tx, ty);
-			cairo_matrix_scale(&matrix, s, s);
-			cairo_pattern_set_matrix(pattern, &matrix);
-			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_PAD);
-			break;
-		case BACKGROUND_TILE:
-			cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
-			break;
-		case BACKGROUND_CENTERED:
-			s = (sx < sy) ? sx : sy;
-			if (s < 1.0)
-				s = 1.0;
-
-			/* align center */
-			tx = (im_w - s * allocation.width) * 0.5;
-			ty = (im_h - s * allocation.height) * 0.5;
-
-			cairo_matrix_init_translate(&matrix, tx, ty);
-			cairo_matrix_scale(&matrix, s, s);
-			cairo_pattern_set_matrix(pattern, &matrix);
-			break;
-		}
-
-		cairo_set_source(cr, pattern);
-		cairo_pattern_destroy (pattern);
-		cairo_surface_destroy(image);
-		cairo_mask(cr, pattern);
-	}
-
-	cairo_destroy(cr);
-	cairo_surface_destroy(surface);
 
 	background->painted = 1;
 	check_desktop_ready(background->window);
@@ -1698,6 +1482,7 @@ background_configure(void *data,
 	}
 
 	if (!background->image && background->color) {
+	  widget_set_use_cairo(background->widget, 0);
 		widget_set_viewport_destination(background->widget, width, height);
 		width = 1;
 		height = 1;
@@ -2067,8 +1852,10 @@ desktop_shell_prepare_lock_surface(void *data,
 	}
 
 	if (!desktop->unlock_dialog) {
+
 		desktop->unlock_dialog = unlock_dialog_create(desktop);
 		desktop->unlock_dialog->desktop = desktop;
+
 	}
 }
 
@@ -2672,58 +2459,304 @@ char *trimwhitespace(char *str)
 }
 
 //Alsa setup
-static void setup_mixer (struct desktop *desktop)
+//Alsa setup
+
+#define MAX_NAME_LEN 256
+
+
+// List all available PCM devices
+int list_pcm_devices(sound_device devices[], snd_pcm_stream_t stream) {
+    int card = -1;
+    int count = 0;
+    snd_ctl_t *ctl;
+    snd_ctl_card_info_t *card_info;
+    snd_pcm_info_t *pcm_info;
+
+
+    snd_ctl_card_info_alloca(&card_info);
+    snd_pcm_info_alloca(&pcm_info);
+
+    // Iterate through all sound cards
+    while (snd_card_next(&card) >= 0 && card >= 0) {
+        char name[32];
+        sprintf(name, "hw:%d", card);
+        //printf(name, "hw:%d \n", card);
+
+        if (snd_ctl_open(&ctl, name, 0) < 0) {
+            continue;
+        }
+
+        if (snd_ctl_card_info(ctl, card_info) < 0) {
+            snd_ctl_close(ctl);
+            continue;
+        }
+
+        int dev = -1;
+
+        // Iterate through all devices on this card
+        while (snd_ctl_pcm_next_device(ctl, &dev) >= 0 && dev >= 0) {
+            if (count >= 50) {
+                break;
+            }
+
+            snd_pcm_info_set_device(pcm_info, dev);
+            snd_pcm_info_set_subdevice(pcm_info, 0);
+            snd_pcm_info_set_stream(pcm_info, stream);
+
+            if (snd_ctl_pcm_info(ctl, pcm_info) >= 0) {
+
+                //printf(devices[count].name, MAX_NAME_LEN, "hw:%d,%d \n", card, dev);
+                sprintf(devices[count].name, snd_ctl_card_info_get_name(card_info));
+
+                printf("--------------- \n %d %s - %s - %s \n",
+                         card,
+                         devices[count].name,
+                         snd_pcm_info_get_name(pcm_info),
+                         snd_pcm_info_get_id(pcm_info)
+                         );
+
+                devices[count].card = card;
+                devices[count].device = dev;
+
+                devices[count].init  = 1;
+                count++;
+            }
+        }
+
+        snd_ctl_close(ctl);
+    }
+
+    return count;
+}
+
+
+static void setup_mixer(struct desktop *desktop, int card, char *card_name, char *mixer_name)
 {
+
   snd_mixer_selem_id_t *sid;
+
   int ret;
+  if(card == -1) {
+    card = 0;
+  }
+  desktop->mixer_handle[card] = NULL;
+  snd_mixer_elem_t *elem;
 
+  printf("Card is %s %d - mixer %s \n", card_name, card, mixer_name);
+  log_message("Card is %s %d - mixer %s \n", card_name, card, mixer_name);
 
-  if ((ret = snd_mixer_open (&desktop->mixer_handle, 0)) < 0)
+  if ((ret = snd_mixer_open (&desktop->mixer_handle[card], 0)) < 0) {
+    printf("No card for snd_mixer_open \n");
+    log_message("No card for snd_mixer_open \n");
+    goto error;
+  }
+
+  if (( ret = snd_mixer_attach (desktop->mixer_handle[card], card_name) ) < 0){
+    printf("No card for snd_mixer_attach \n");
+    log_message("No card for snd_mixer_attach \n");
+    goto error;
+  }
+
+  if ((ret = snd_mixer_selem_register (desktop->mixer_handle[card], NULL, NULL)) < 0) {
+    printf("No card \n");
+    log_message("No card mixer \n");
+    goto error;
+  }
+
+  if ((ret = snd_mixer_load (desktop->mixer_handle[card])) < 0)
     goto error;
 
-  if ((ret = snd_mixer_attach (desktop->mixer_handle, "default")) < 0)
-    goto error;
+  // Find mixer name for bluealsa
+  if(desktop->mixer_handle[card] != NULL && strcmp("bluealsa", card_name) == 0 &&
+    (strcmp("0", mixer_name) == 0 || strcmp("", mixer_name) == 0)
+  ) {
 
-  if ((ret = snd_mixer_selem_register (desktop->mixer_handle, NULL, NULL)) < 0)
-    goto error;
+    for (elem = snd_mixer_first_elem(desktop->mixer_handle[card]);
+      elem != NULL; elem = snd_mixer_elem_next(elem)) {
+        const char *name = snd_mixer_selem_get_name(elem);
+        printf("BlueAlsa mixer name: %s\n", name);
+        log_message("BlueAlsa mixer name: %s\n", name);
+        if(desktop->sound_mixers[card])
+          free(desktop->sound_mixers[card]);
+        desktop->sound_mixers[card] = strdup(name);
+        mixer_name = (char *)name;
+        break;
+    }
 
-  if ((ret = snd_mixer_load (desktop->mixer_handle)) < 0)
-    goto error;
+  }
 
   snd_mixer_selem_id_alloca (&sid);
   snd_mixer_selem_id_set_index (sid, 0);
-  snd_mixer_selem_id_set_name (sid, "Master");
-  desktop->mixer = snd_mixer_find_selem (desktop->mixer_handle, sid);
+  snd_mixer_selem_id_set_name (sid, mixer_name);
+  desktop->mixer[card] = snd_mixer_find_selem (desktop->mixer_handle[card], sid);
 
   /* fallback to mixer "Master" */
-  if (desktop->mixer == NULL)
+  if (desktop->mixer[card] == NULL)
     {
       snd_mixer_selem_id_set_name (sid, "PCM");
-      desktop->mixer = snd_mixer_find_selem (desktop->mixer_handle, sid);
-      if (desktop->mixer == NULL)
+      desktop->mixer[card] = snd_mixer_find_selem (desktop->mixer_handle[card], sid);
+      if (desktop->mixer[card] == NULL) {
+        printf("PCM or Master mixers do not exist\n");
+        log_message("PCM or Master mixers do not exist\n");
+        ret = -1;
         goto error;
+      }
     }
 
-  if ((ret = snd_mixer_selem_get_playback_volume_range (desktop->mixer,
-              &desktop->min_volume, &desktop->max_volume)) < 0)
+  if ((ret = snd_mixer_selem_get_playback_volume_range (desktop->mixer[card],
+              &desktop->min_volumes[card],
+              &desktop->max_volumes[card])) < 0)
     goto error;
 
-  printf("Mixer volumes are max/min %d/%d \n", desktop->max_volume,
-    desktop->min_volume);
+  printf("Mixer volumes are max/min %i/%i - Card index - %d \n",
+    desktop->max_volumes[card],
+    desktop->min_volumes[card],
+     card);
+  log_message("Mixer volumes are max/min %i/%i - Card index - %d \n",
+    desktop->max_volumes[card],
+    desktop->min_volumes[card],
+     card);
 
-  return;
+  snd_mixer_handle_events (desktop->mixer_handle[card]);
+
+  snd_mixer_selem_get_playback_volume(desktop->mixer[card],
+    0, &desktop->card_volumes[card]);
+
+  desktop->card_volume_per[card] =
+      alsa_volume_to_percentage(desktop->card_volumes[card], card);
+
+  printf("Volume is %d per %f for card %d \n", desktop->card_volumes[card],
+    desktop->card_volume_per[card],
+    card);
+  log_message("Volume is %d per %f for card %d \n", desktop->card_volumes[card],
+    desktop->card_volume_per[card],
+    card);
+
+    return;
 
 error:
-  printf ("failed to setup mixer: %s", snd_strerror (ret));
+  printf ("Failed to setup mixer: %s \n", snd_strerror (ret));
+  log_message ("Failed to setup mixer: %s \n", snd_strerror (ret));
 
-  if (desktop->mixer_handle != NULL)
-    snd_mixer_close (desktop->mixer_handle);
-  desktop->mixer_handle = NULL;
-  desktop->mixer = NULL;
+  if (desktop->mixer_handle[card] != NULL)
+    snd_mixer_close (desktop->mixer_handle[card]);
+
+  desktop->mixer[card] = NULL;
+  desktop->mixer_handle[card] = NULL;
 }
+
+
+static void setup_sound_cards (struct desktop *desktop) {
+
+  char *token;
+  char *name;
+  int card_id = -1;
+  char *device;
+  int idevice = 0;
+  char *mixer_name;
+  const char delimiter[2] = "|";
+  const char delimiter2[2] = ",";
+  int index = 0;
+
+  int card_index = 0;
+  char *saveptr1;
+  char card_dev[20];
+
+  printf("Sound card config: %s \n", desktop->multiple_sound_cards);
+
+  static sound_device devices[50] = {0};
+  static int sound_card_count = 0;
+  if(sound_card_count == 0) {
+    sound_card_count = list_pcm_devices(devices, SND_PCM_STREAM_PLAYBACK);
+    if(sound_card_count < 1) {
+      sound_card_count = -1;
+      return;
+    }
+  }
+
+
+
+  // Get the first token
+  token = strtok(desktop->multiple_sound_cards, "|");
+
+  // Walk through other tokens
+  while (token != NULL) {
+      card_id = -1;
+      name = strtok_r(token, delimiter2, &saveptr1);
+      if(name) {
+
+        device = strtok_r(NULL, delimiter2, &saveptr1);
+        if(device) {
+
+          mixer_name = strtok_r(NULL, delimiter2, &saveptr1);
+          printf("Mixer name: %s \n", mixer_name);
+          if(mixer_name) {
+
+            printf("Count: %d \n", sound_card_count);
+            for(int jj = 0; jj < sound_card_count; jj++) {
+
+              if(strcmp(devices[jj].name, name) == 0) {
+                card_id = devices[jj].card;
+                printf("0 - Card found: %d %s %d \n", card_id, name, devices[jj].card);
+                break;
+              }
+            }
+
+            printf("1 - Card found: %d hw:%d for %s \n", card_id, card_id, name);
+
+            if(card_id > -1) {
+              sprintf(card_dev, "hw:%d", card_id);
+              if(strcmp("bluealsa", name) != 0) {
+                setup_mixer(desktop, card_index, card_dev, mixer_name);
+              }
+            } else if(strcmp("bluealsa", name) == 0) {
+                sprintf(card_dev, "bluealsa");
+                desktop->mixer_handle[card_index] = NULL;
+                setup_mixer(desktop, card_index, card_dev, mixer_name);
+                desktop->sound_cards[card_index] = card_id;
+                desktop->sound_cards_is_blue[card_index] = 1;
+                desktop->sound_card_devices[card_index] = strdup(device);
+                desktop->sound_mixers[card_index] = strdup(mixer_name);
+                //TODO Add task run to get volume
+
+                card_index++;
+                desktop->sound_cards_count++;
+            }
+            if(desktop->mixer_handle[card_index]) {
+              //sprintf(desktop->sound_cards[card_index], "hw:CARD=%s,DEV=%s", name, device);
+              //sprintf(desktop->sound_card_names[card_index], "%s", name, card_index, device);
+
+
+              desktop->sound_cards[card_index] = card_id;
+              desktop->sound_card_devices[card_index] = strdup(device);
+              desktop->sound_mixers[card_index] = strdup(mixer_name);
+
+              printf("Card system number: %d\n", desktop->sound_cards[card_index]);
+              //printf("Card name: %s\n", desktop->sound_card_names[card_index]);
+              printf("Card name: %s\n", name);
+              printf("Dev: %d\n", desktop->sound_card_devices[card_index]);
+              printf("Mixer: %s\n", desktop->sound_mixers[card_index]);
+              card_index++;
+              desktop->mixer_handle[card_index] = NULL;
+              desktop->sound_cards_count++;
+
+            }
+          }
+        }
+      }
+
+      token = strtok(NULL, delimiter);
+
+  }
+
+}
+
+
+
 //Alsa
 
 //Battery
+//TODO
 void check_battery_exists() {
 
   #if 0
@@ -2760,6 +2793,22 @@ void check_battery_exists() {
   file_access = access(battery_path, F_OK);
 
   if(file_access == -1) {
+    goto try2;
+  }
+
+  stat(battery_path, &st);
+  if(st.st_size < 1) //does not exist
+    goto try2;
+
+  global_battery_exists = 1;
+  sprintf(global_battery_path, "/sys/class/power_supply/BAT1/capacity");
+
+  try2:
+
+  sprintf(battery_path, "/sys/class/power_supply/qcom-battery/capacity");
+  file_access = access(battery_path, F_OK);
+
+  if(file_access == -1) {
     return;
   }
 
@@ -2768,7 +2817,8 @@ void check_battery_exists() {
     return;
 
   global_battery_exists = 1;
-  sprintf(global_battery_path, "/sys/class/power_supply/BAT1/capacity");
+  sprintf(global_battery_path, "/sys/class/power_supply/qcom-battery/capacity");
+
 
 }
 //Battery
@@ -2777,27 +2827,29 @@ void check_battery_exists() {
 
 //shm audio commands
 static double
-alsa_volume_to_percentage (long value)
+alsa_volume_to_percentage (long value, int card_index)
 {
   long range;
 
   /* min volume isn't always zero unfortunately */
-  range = global_desktop->max_volume - global_desktop->min_volume;
+  range = global_desktop->max_volumes[card_index]
+    - global_desktop->min_volumes[card_index];
 
-  value -= global_desktop->min_volume;
+  value -= global_desktop->min_volumes[card_index];
 
   return (value / (double) range) * 100;
 }
 
 static long
-percentage_to_alsa_volume (double value)
+percentage_to_alsa_volume (double value, int card_index)
 {
   long range;
 
   /* min volume isn't always zero unfortunately */
-  range = global_desktop->max_volume - global_desktop->min_volume;
+  range = global_desktop->max_volumes[card_index]
+    - global_desktop->min_volumes[card_index];
 
-  return (range * value / 100) + global_desktop->min_volume;
+  return (range * value / 100) + global_desktop->min_volumes[card_index];
 }
 
 static void volume_set (double value) {
@@ -2807,18 +2859,11 @@ static void volume_set (double value) {
 
   printf("volume value is %f \n", value);
 
-  #if 0
-  if(value > global_desktop->max_volume ) {
-    value = global_desktop->max_volume - 1;
-  } else if ( value < global_desktop->min_volume ) {
-    value = global_desktop->min_volume;
-  }
-  #endif
-
-  if (global_desktop->mixer != NULL)
+  if (global_desktop->mixer[global_desktop->current_sound_card] != NULL)
   {
     snd_mixer_selem_set_playback_volume_all (
-      global_desktop->mixer, percentage_to_alsa_volume (value)
+      global_desktop->mixer[global_desktop->current_sound_card],
+      percentage_to_alsa_volume (value, global_desktop->current_sound_card)
     );
   }
 
@@ -2832,7 +2877,7 @@ static void volume_set (double value) {
   else
     icon_name = "audio-volume-muted-symbolic";
 
-  printf("icon_name is %s \n", icon_name);
+  //printf("icon_name is %s \n", icon_name);
 
 
 }
@@ -2953,6 +2998,38 @@ panel_add_battery(struct panel *panel)
  //battery
 
 
+static void toggle_night_light(struct panel_launcher *launcher) {
+
+  struct desktop *desktop = launcher->panel->desktop;
+  launcher->toggled = !launcher->toggled;
+
+
+  desktop->input_panel_shown = !desktop->input_panel_shown;
+  shell_helper_change_gamma (desktop->helper, desktop->shell, 1);
+
+  widget_schedule_redraw(launcher->widget);
+}
+
+
+static void toggle_input_panel(struct panel_launcher *launcher) {
+
+  struct desktop *desktop = launcher->panel->desktop;
+
+  if(!desktop->input_panel_surface) {
+    desktop->input_panel_surface = main_input_panel(desktop, desktop->virtual_keyboard_width, desktop->virtual_keyboard_height);
+    shell_helper_input_panel_surface (desktop->helper, desktop->shell, desktop->input_panel_surface);
+  } else {
+    redraw_input_panel(desktop, desktop->virtual_keyboard_width, desktop->virtual_keyboard_height);
+  }
+
+  launcher->toggled = !launcher->toggled;
+  desktop->input_panel_shown = !desktop->input_panel_shown;
+  shell_helper_toggle_input_panel (desktop->helper, desktop->shell, desktop->input_panel_shown);
+
+  widget_schedule_redraw(launcher->widget);
+}
+
+
 static void toggle_inhibit(struct panel_launcher *launcher) {
 
   shell_helper_toggle_inhibit (global_desktop->helper, global_desktop->shell, global_desktop->seat);
@@ -2965,6 +3042,29 @@ static void toggle_inhibit(struct panel_launcher *launcher) {
 static void launch_exposay(struct panel_launcher *launcher) {
   shell_helper_launch_exposay (global_desktop->helper, global_desktop->shell, global_desktop->seat);
 }
+
+
+static void set_default_sound_card(int card_index) {
+  char c_buf[128];
+  printf("Set sound card %d to %d %s \n", global_desktop->current_sound_card,
+  global_desktop->sound_cards[global_desktop->current_sound_card],
+  global_desktop->sound_card_devices[global_desktop->current_sound_card]);
+
+  if(!global_desktop->sound_cards_is_blue[card_index])
+    snprintf(c_buf, sizeof c_buf, "/usr/bin/bash /usr/lib/weston/wayward-set-sound-card %d %s",
+      global_desktop->sound_cards[global_desktop->current_sound_card],
+      global_desktop->sound_card_devices[global_desktop->current_sound_card]);
+  else
+    snprintf(c_buf, sizeof c_buf, "/usr/bin/bash /usr/lib/weston/wayward-set-sound-card bluealsa '%s'",
+      global_desktop->sound_card_devices[global_desktop->current_sound_card]
+      );
+
+  if( system ( c_buf ) ) {
+    printf("Set sound card. error occured %s \n", strerror(errno));
+  }
+}
+
+
 //TODO
 //Add support for cases when clock is disabled in the weston settings
 
@@ -3062,7 +3162,31 @@ static void panel_brightness_label_redraw_handler(struct widget *widget, void *d
 
 }
 
-static void panel_volume_label_redraw_handler(struct widget *widget, void *data) {
+static void
+panel_sound_card_label_button_handler(struct widget *widget,
+			     struct input *input, uint32_t time,
+			     uint32_t button,
+			     enum wl_pointer_button_state state, void *data)
+{
+  struct panel_label *label = data;
+
+  if (state != WL_POINTER_BUTTON_STATE_RELEASED)
+    return;
+
+  if(label->panel->desktop->current_sound_card < (label->panel->desktop->sound_cards_count - 1)) {
+    label->panel->desktop->current_sound_card++;
+  } else {
+    label->panel->desktop->current_sound_card = 0;
+  }
+  printf("Current sound card %d %d %p \n", label->panel->desktop->current_sound_card,
+    label->panel->desktop->sound_cards_count,
+    global_desktop->mixer[label->panel->desktop->current_sound_card]
+  );
+	window_schedule_resize(label->panel->desktop->panel->window, global_desktop_width, label->panel->desktop->panel_height);
+  set_default_sound_card(label->panel->desktop->current_sound_card);
+}
+
+static void panel_sound_card_label_redraw_handler(struct widget *widget, void *data) {
 
 	cairo_t *cr;
 	struct rectangle allocation;
@@ -3073,7 +3197,19 @@ static void panel_volume_label_redraw_handler(struct widget *widget, void *data)
   if(label->panel->clock_state != VOLUME_SHOWN)
     return;
 
-	sprintf(string, "%d", (int)global_desktop->current_volume_percentage);
+  if(!global_desktop->sound_cards_is_blue[global_desktop->current_sound_card])
+	  sprintf(string, "s%d", global_desktop->current_sound_card);
+  else {
+
+	  sprintf(string, "b%d", global_desktop->current_sound_card);
+	  if(!global_desktop->mixer_handle[global_desktop->current_sound_card]) {
+	    printf("No bluetooth mixer - retest \n");
+	    log_message("No bluetooth mixer - retest \n");
+      setup_mixer(global_desktop, global_desktop->current_sound_card, "bluealsa",
+        global_desktop->sound_mixers[global_desktop->current_sound_card]
+      );
+    }
+  }
 
   label->panel->painted = 0;
 	cr = widget_cairo_create(label->panel->widget);
@@ -3089,11 +3225,99 @@ static void panel_volume_label_redraw_handler(struct widget *widget, void *data)
   //TODO figure out why
   //For some reason, Cairo draws above y here
   allocation.y = floor( (label->panel->desktop->panel_height + (int)extents.height) / 2 );
+  allocation.width = 35;
+
+  widget_set_size(widget, allocation.width, 35);
 
   if(label->force_x)
     allocation.x = label->force_x;
 
-	printf("Volume label drawn annotation x y %d %d %f \n", allocation.x, allocation.y, extents.height);
+	//printf("Volume label drawn annotation x y %d %d %f \n", allocation.x, allocation.y, extents.height);
+
+	cairo_move_to(cr, allocation.x, allocation.y);
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_show_text(cr, string);
+	cairo_destroy(cr);
+
+}
+
+static struct panel_label *panel_add_sound_card_label(struct panel *panel)
+{
+	struct panel_label *label;
+
+	label = xzalloc(sizeof *label);
+	label->force_x = 0;
+
+	label->panel = panel;
+	panel->sound_card_label = label;
+
+
+	label->widget = widget_add_widget(panel->widget, label);
+	widget_set_redraw_handler(label->widget, panel_sound_card_label_redraw_handler);
+	widget_set_button_handler(label->widget, panel_sound_card_label_button_handler);
+
+  return label;
+}
+
+
+static void
+panel_volume_label_button_handler(struct widget *widget,
+			     struct input *input, uint32_t time,
+			     uint32_t button,
+			     enum wl_pointer_button_state state, void *data)
+{
+  struct panel_label *label = data;
+
+  if (state != WL_POINTER_BUTTON_STATE_RELEASED)
+    return;
+
+  if(label->panel->desktop->current_sound_card < (label->panel->desktop->sound_cards_count - 1)) {
+    label->panel->desktop->current_sound_card++;
+  } else {
+    label->panel->desktop->current_sound_card = 0;
+  }
+  printf("Current sound card %d %d %p \n", label->panel->desktop->current_sound_card,
+    label->panel->desktop->sound_cards_count,
+    global_desktop->mixer[label->panel->desktop->current_sound_card]
+  );
+	window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
+}
+
+static void panel_volume_label_redraw_handler(struct widget *widget, void *data) {
+
+	cairo_t *cr;
+	struct rectangle allocation;
+	cairo_text_extents_t extents;
+	char string[7];
+  struct panel_label *label = data;
+
+  if(label->panel->clock_state != VOLUME_SHOWN)
+    return;
+
+	sprintf(string, "%d", (int)global_desktop->card_volume_per[global_desktop->current_sound_card]);
+
+  label->panel->painted = 0;
+	cr = widget_cairo_create(label->panel->widget);
+	cairo_set_font_size(cr, label->panel->desktop->panel_font_size);
+
+  cairo_select_font_face (cr, "Droid Sans",
+				CAIRO_FONT_SLANT_NORMAL,
+				CAIRO_FONT_WEIGHT_NORMAL);
+
+	cairo_text_extents(cr, string, &extents);
+
+  allocation.x = label->panel->clock_allocation.x;
+  //TODO figure out why
+  //For some reason, Cairo draws above y here
+  allocation.y = floor( (label->panel->desktop->panel_height + (int)extents.height) / 2 );
+  allocation.width = 30;
+
+  widget_set_size(widget, allocation.width, 30);
+
+  if(label->force_x)
+    allocation.x = label->force_x;
+
+	//printf("Volume label drawn annotation x y %d %d %f \n", allocation.x, allocation.y, extents.height);
 
 	cairo_move_to(cr, allocation.x, allocation.y);
 	cairo_set_source_rgba(cr, 1, 1, 1, 1);
@@ -3115,6 +3339,7 @@ static struct panel_label *panel_add_volume_label(struct panel *panel)
 
 	label->widget = widget_add_widget(panel->widget, label);
 	widget_set_redraw_handler(label->widget, panel_volume_label_redraw_handler);
+	widget_set_button_handler(label->widget, panel_volume_label_button_handler);
 
   return label;
 }
@@ -3199,8 +3424,10 @@ static void launch_volume(struct panel_launcher *launcher) {
 
   struct rectangle allocation;
   struct rectangle widget_allocation;
+  struct rectangle label_allocation;
 	cairo_t *cr;
   int label_padding = 0;
+  struct panel *panel = launcher->panel;
 
 	widget_get_allocation(launcher->panel->volumeup_launcher->widget, &widget_allocation);
 
@@ -3212,7 +3439,7 @@ static void launch_volume(struct panel_launcher *launcher) {
 
 
   if(launcher->panel->clock_state == CLOCK_SHOWN) {
-    if(global_desktop->current_volume_percentage < 100) {
+    if(global_desktop->card_volume_per[global_desktop->current_sound_card] < 100) {
       label_padding = floor(launcher->panel->desktop->panel_spacing * 0.5);
     }
 
@@ -3228,6 +3455,11 @@ static void launch_volume(struct panel_launcher *launcher) {
     //volume label
     launcher->panel->volume_label->force_x = launcher->panel->clock_allocation.x +
       launcher->panel->desktop->icon_size + launcher->panel->desktop->panel_spacing + label_padding;
+
+    if(panel->sound_card_label)
+      panel->sound_card_label->force_x = panel->clock_allocation.x
+      + 3 * launcher->panel->desktop->icon_size + 3 * launcher->panel->desktop->panel_spacing + 10;
+
     launcher->panel->clock_state = VOLUME_SHOWN;
 
 	} else {
@@ -3236,6 +3468,8 @@ static void launch_volume(struct panel_launcher *launcher) {
     launcher->panel->volumeup_launcher->force_x = WAYWARD_HIDE_X;
     launcher->panel->volume_label->force_x = WAYWARD_HIDE_X;
     launcher->panel->clock_state = CLOCK_SHOWN;
+    if(panel->sound_card_label)
+      launcher->panel->sound_card_label->force_x = WAYWARD_HIDE_X;
 
     printf("Hiding volume \n");
 
@@ -3264,6 +3498,16 @@ static void launch_volume(struct panel_launcher *launcher) {
     widget_allocation.height
   );
 
+  if(panel->sound_card_label) {
+    widget_get_allocation(panel->sound_card_label->widget, &widget_allocation);
+
+    widget_set_allocation(panel->sound_card_label->widget,
+      panel->sound_card_label->force_x,
+      widget_allocation.y,
+    	widget_allocation.width,
+      widget_allocation.height
+    );
+  }
 
   widget_schedule_redraw(launcher->panel->volumedown_launcher->widget);
   widget_schedule_redraw(launcher->panel->volumeup_launcher->widget);
@@ -3275,16 +3519,12 @@ static void launch_volume(struct panel_launcher *launcher) {
 
 
 void launch_browser() {
-
   extern char **environ;
 
   pid_t pid;
   char *argv[] = {"/usr/bin/xdg-open", "https://start.duckduckgo.com?kae=d", NULL};
 
-  int status = posix_spawn(&pid, "/usr/bin/xdg-open", NULL, NULL, argv, environ);
-  return;
-
-
+  posix_spawn(&pid, "/usr/bin/xdg-open", NULL, NULL, argv, environ);
 }
 
 void launch_terminal() {
@@ -3302,48 +3542,80 @@ void launch_terminal() {
 
 void clock_volume_mute () {
   volume_set(0);
-  global_desktop->current_volume_percentage = 0;
+  global_desktop->card_volume_per[global_desktop->current_sound_card] = 0;
+  global_desktop->card_volumes[global_desktop->current_sound_card] = 0;
 }
 
 void clock_volume_up () {
 
-  printf("Volume pre-up is %d \n", global_desktop->current_volume);
+  printf("Volume pre-up is %d per %f for card %d \n", global_desktop->card_volumes[global_desktop->current_sound_card],
+    global_desktop->card_volume_per[global_desktop->current_sound_card],
+    global_desktop->current_sound_card
+  );
 
-  volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume + WAYWARD_AUDIO_STEP)));
+  volume_set( alsa_volume_to_percentage(
+    (double)(global_desktop->card_volumes[global_desktop->current_sound_card] + WAYWARD_AUDIO_STEP),
+    global_desktop->current_sound_card
+  ));
 
-  if (global_desktop->mixer != NULL)
+  if (global_desktop->mixer[global_desktop->current_sound_card] != NULL)
   {
-    snd_mixer_handle_events (global_desktop->mixer_handle);
-    snd_mixer_selem_get_playback_volume(global_desktop->mixer,
-    0, &global_desktop->current_volume);
 
-    global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
+    if(!global_desktop->sound_cards_is_blue[global_desktop->current_sound_card]) {
+      snd_mixer_handle_events (global_desktop->mixer_handle[global_desktop->current_sound_card]);
+      snd_mixer_selem_get_playback_volume(global_desktop->mixer[global_desktop->current_sound_card],
+        0, &global_desktop->card_volumes[global_desktop->current_sound_card]);
+    } else {
+      global_desktop->card_volumes[global_desktop->current_sound_card]
+        = global_desktop->card_volumes[global_desktop->current_sound_card] + WAYWARD_AUDIO_STEP;
+    }
+    global_desktop->card_volume_per[global_desktop->current_sound_card] =
+      alsa_volume_to_percentage(global_desktop->card_volumes[global_desktop->current_sound_card],
+      global_desktop->current_sound_card
+    );
 
-    printf("Volume post-up is %d \n", global_desktop->current_volume);
+    printf("Volume post-up is %d for card %d \n", global_desktop->card_volumes[global_desktop->current_sound_card],
+      global_desktop->current_sound_card
+    );
   }
 }
 
 void clock_volume_down () {
 
+  printf("Volume pre-down is %d for card %d \n", global_desktop->card_volumes[global_desktop->current_sound_card],
+    global_desktop->current_sound_card
+  );
 
+  volume_set( alsa_volume_to_percentage((double)(global_desktop->card_volumes[global_desktop->current_sound_card]
+    - WAYWARD_AUDIO_STEP),
+    global_desktop->current_sound_card
+    )
+  );
 
-  printf("Volume pre-down is %d \n", global_desktop->current_volume);
-
-
-  volume_set( alsa_volume_to_percentage((double)(global_desktop->current_volume - WAYWARD_AUDIO_STEP)) );
-
-  if (global_desktop->mixer != NULL)
+  if (global_desktop->mixer[global_desktop->current_sound_card] != NULL)
   {
-    snd_mixer_handle_events (global_desktop->mixer_handle);
-    snd_mixer_selem_get_playback_volume (global_desktop->mixer,
-    0, &global_desktop->current_volume);
 
-    global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
-    printf("Volume post-down is %d \n", global_desktop->current_volume);
+  if(!global_desktop->sound_cards_is_blue[global_desktop->current_sound_card]) {
+      snd_mixer_handle_events (global_desktop->mixer_handle[global_desktop->current_sound_card]);
+      snd_mixer_selem_get_playback_volume(global_desktop->mixer[global_desktop->current_sound_card],
+        0, &global_desktop->card_volumes[global_desktop->current_sound_card]);
+    } else {
+      global_desktop->card_volumes[global_desktop->current_sound_card]
+        = global_desktop->card_volumes[global_desktop->current_sound_card] - WAYWARD_AUDIO_STEP;
+    }
+
+    global_desktop->card_volume_per[global_desktop->current_sound_card] =
+      alsa_volume_to_percentage(global_desktop->card_volumes[global_desktop->current_sound_card],
+      global_desktop->current_sound_card
+      );
+    printf("Volume post-down is %d for card %d %f \n", global_desktop->card_volumes[global_desktop->current_sound_card],
+      global_desktop->current_sound_card,
+      global_desktop->card_volume_per[global_desktop->current_sound_card]
+    );
   }
 
-  if(global_desktop->current_volume_percentage < 7 )
-    volume_set(0);
+  if(global_desktop->card_volume_per[global_desktop->current_sound_card] < 7 )
+    clock_volume_mute(0);
 
 
 
@@ -3507,8 +3779,6 @@ static void brightnessctl (int dir) {
 
 
   execl ("/usr/bin/brightnessctl", "/usr/bin/brightnessctl", "s", c, dev, (char *)0);
-  //char *newargv[] = { "/usr/bin/brightnessctl", "s", c, dev, "", NULL };
-  //execve(newargv[0], newargv, environ);
 
 }
 
@@ -3894,6 +4164,25 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   printf("Clock allocation is %d %d \n", clock_allocation.x, clock_allocation.y);
 
   //Action launchers
+#if 0
+  if(1)
+    panel_add_launcher(panel,
+  		"/usr/share/wayward/night-light-symbolic.svg",
+      "",
+      0,
+      toggle_night_light
+    );
+#endif
+
+  if(desktop->virtual_keyboard)
+    panel_add_launcher(panel,
+  		"/usr/share/wayward/input-keyboard-symbolic.svg",
+      "",
+      0,
+      toggle_input_panel
+    );
+
+
   panel_add_launcher(panel,
 		"/usr/share/wayward/tv-symbolic.svg",
     "",
@@ -3919,7 +4208,7 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
   //Add brightness
   desktop->current_brightness = wayward_add_brightness(panel, desktop);
 
-  if(desktop->mixer_handle != NULL && !disable_sound_icons) {
+  if(desktop->mixer_handle[desktop->current_sound_card] != NULL && !disable_sound_icons) {
     panel_add_launcher(panel,
      "/usr/share/wayward/multimedia-volume-control-symbolic.svg",
       "",
@@ -3952,7 +4241,7 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
 
 
 
-  if(!global_desktop->mixer_handle || disable_sound_icons)
+  if(disable_sound_icons || !global_desktop->mixer_handle[global_desktop->current_sound_card])
     return;
 
   //Add plus/minus button
@@ -3969,16 +4258,19 @@ panel_add_launchers(struct panel *panel, struct desktop *desktop)
     clock_volume_up
   );
 
-  snd_mixer_handle_events (global_desktop->mixer_handle);
-  snd_mixer_selem_get_playback_volume(global_desktop->mixer,
-  0, &global_desktop->current_volume);
-  global_desktop->current_volume_percentage = alsa_volume_to_percentage(global_desktop->current_volume);
-  printf("Volume is %d \n", desktop->current_volume);
+  snd_mixer_handle_events (desktop->mixer_handle[desktop->current_sound_card]);
+
   panel->volume_label = panel_add_volume_label(panel);
+  if(desktop->sound_cards_count > 1)
+    panel->sound_card_label = panel_add_sound_card_label(panel);
+  else
+    panel->sound_card_label = NULL;
 
   panel->volumedown_launcher->force_x = WAYWARD_HIDE_X;
   panel->volumeup_launcher->force_x = WAYWARD_HIDE_X;
   panel->volume_label->force_x = WAYWARD_HIDE_X;
+  if(panel->sound_card_label)
+    panel->sound_card_label->force_x = WAYWARD_HIDE_X;
   widget_schedule_redraw(panel->volumedown_launcher->widget);
   widget_schedule_redraw(panel->volumeup_launcher->widget);
 
@@ -4033,6 +4325,27 @@ parse_clock_format(struct desktop *desktop, struct weston_config_section *s)
 	free(clock_format);
 }
 
+static void
+check_desktop_ready(struct window *window)
+{
+	struct display *display;
+	struct desktop *desktop;
+	struct wl_surface *input_panel_surface = NULL;
+
+	display = window_get_display(window);
+	desktop = display_get_user_data(display);
+
+	if (!desktop->painted && is_desktop_painted(desktop)) {
+		desktop->painted = 1;
+
+		weston_desktop_shell_desktop_ready(desktop->shell);
+
+
+
+
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	struct desktop desktop = { 0 };
@@ -4040,8 +4353,9 @@ int main(int argc, char *argv[])
 	struct weston_config_section *s;
 	const char *config_file;
 
+  desktop.multiple_sound_cards = NULL;
 	desktop.unlock_task.run = unlock_dialog_finish;
-	wl_list_init(&desktop.outputs);
+  wl_list_init(&desktop.outputs);
 
 	config_file = weston_config_get_name_from_env();
 	desktop.config = weston_config_parse(config_file);
@@ -4050,14 +4364,23 @@ int main(int argc, char *argv[])
 
   weston_config_section_get_string(s, "pin-code", &desktop.pincode, NULL);
 
-	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+  s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
 	weston_config_section_get_bool(s, "enable-autohide", &desktop.enable_autohide, true);
 
 
 	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
 	weston_config_section_get_int(s, "icon-size", &desktop.icon_size, WAYWARD_ICON_SIZE);
 
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_bool(s, "virtual-keyboard", &desktop.virtual_keyboard, true);
 
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_int(s, "virtual-keyboard-width", &desktop.virtual_keyboard_width, 900);
+
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_int(s, "virtual-keyboard-height", &desktop.virtual_keyboard_height, 400);
+
+  weston_config_section_get_string(s, "multiple-sound-cards", &desktop.multiple_sound_cards, NULL);
 
 	if(desktop.icon_size >= 64) {
 	  desktop.icon_size = 64;
@@ -4087,6 +4410,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+
+
   global_desktop = &desktop;
 
 	display_set_user_data(desktop.display, &desktop);
@@ -4098,7 +4423,16 @@ int main(int argc, char *argv[])
 	if (desktop.want_panel)
 		weston_desktop_shell_set_panel_position(desktop.shell, desktop.panel_position);
 
-  setup_mixer(&desktop);
+  desktop.current_sound_card = 0;
+
+  if(desktop.multiple_sound_cards != NULL) {
+    setup_sound_cards(&desktop);
+  } else {
+    setup_mixer(&desktop, -1, "hw:0", "Master");
+  }
+
+  if(desktop.sound_cards_count)
+    set_default_sound_card(0);
 
   //check if battery exists
   check_battery_exists();
@@ -4134,8 +4468,6 @@ int main(int argc, char *argv[])
 
 	grab_surface_create(&desktop);
 
-
-
 	signal(SIGCHLD, sigchild_handler);
 
 	display_run(desktop.display);
@@ -4145,6 +4477,8 @@ int main(int argc, char *argv[])
 	desktop_destroy_outputs(&desktop);
 	if (desktop.unlock_dialog)
 		unlock_dialog_destroy(desktop.unlock_dialog);
+
+	destroy_input_panel();
 	weston_desktop_shell_destroy(desktop.shell);
 	display_destroy(desktop.display);
 	weston_config_destroy(desktop.config);

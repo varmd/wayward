@@ -1,17 +1,25 @@
 pkgname=wayward
-pkgver=1.4.1
+pkgver=1.5.1
 pkgrel=11
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
 url="https://github.com/varmd/wayward"
 
 license=('GPL')
-provides=("wayward")
-depends=("weston" "ttf-droid" "alsa-lib")
+provides=("wayward" "weston")
+replaces=("weston")
+conflicts=("weston")
+depends=("ttf-droid" "alsa-lib")
 makedepends=( "fakeroot" "gcc")
+
+source weston/PKGBUILD
 
 export _source="$PWD"
 prepare() {
+
+  build_weston
+
+
   cd "$srcdir/"
   rm -rf $srcdir/source
   cp -r "$_source"/source .
@@ -23,7 +31,16 @@ build() {
 }
 
 package() {
+
+
+  package_weston2
 	cd "$srcdir/source/source"
 	sh install.sh $pkgdir
-  rm -rf $srcdir
+
+	cp $pkgdir/usr/share/weston/icon_window.png $pkgdir/usr/share/wayward/
+	cp $pkgdir/usr/share/weston/sign_close.png $pkgdir/usr/share/wayward/
+	cp $pkgdir/usr/share/weston/sign_maximize.png $pkgdir/usr/share/wayward/
+	cp $pkgdir/usr/share/weston/sign_minimize.png $pkgdir/usr/share/wayward/
+	rm -rf $pkgdir/usr/share/weston/
+  #rm -rf $srcdir
 }

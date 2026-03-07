@@ -4,6 +4,7 @@
 
 depends+=('glibc'
          'wayland'
+         'wayland-protocols'
          'libxkbcommon'
          'libinput'
          'pixman'

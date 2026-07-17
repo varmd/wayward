@@ -61,7 +61,7 @@
 
 //wayward shell
 static struct desktop *global_desktop = NULL;
-int global_desktop_width = 2;
+
 
 
 int global_battery_exists = 0;
@@ -315,7 +315,7 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 		allocation.y++;
 	}
 
-	allocation.y = floor( (launcher->panel->desktop->panel_spacing)  );
+	allocation.y = floor( (global_desktop->panel_spacing)  );
 
   //special case to hide launchers for clock section
   if(launcher->force_x) {
@@ -372,6 +372,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
 {
 	struct panel_launcher *launcher;
 	struct panel_launcher *prev_launcher = NULL;
+	struct panel *panel = data;
   int flag = 0;
 	int count = 0;
 
@@ -383,7 +384,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
 
     case KEY_ENTER:
     case KEY_SPACE:
-      wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
+      wl_list_for_each(launcher, &panel->launcher_list, link) {
       if(launcher->focused) {
         launcher->focused = 0;
         widget_schedule_redraw(launcher->widget);
@@ -392,7 +393,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
 
         //shell_helper_keyboard_focus_surface(global_desktop->helper, global_desktop->background->wl_surface);
         if(!launcher->function)
-          wayland_pointer_leave_cb(NULL, NULL, 0, global_desktop->panel->wl_surface);
+          wayland_pointer_leave_cb(NULL, NULL, 0, launcher->panel->wl_surface);
         return;
       }
     }
@@ -400,7 +401,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
 
     case KEY_TAB:
     case KEY_RIGHT:
-      wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
+      wl_list_for_each(launcher, &panel->launcher_list, link) {
         count++;
         if(flag) {
           launcher->focused = 1;
@@ -415,7 +416,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
       }
       //loop after end
       if(flag) {
-        wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
+        wl_list_for_each(launcher, &panel->launcher_list, link) {
           launcher->focused = 1;
           widget_schedule_redraw(launcher->widget);
           return;
@@ -423,7 +424,7 @@ panel_key_handler(struct window *window, struct input *input, uint32_t time,
       }
     break;
     case KEY_LEFT:
-    wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
+    wl_list_for_each(launcher, &panel->launcher_list, link) {
 
       if(launcher->focused) {
         launcher->focused = 0;
@@ -459,15 +460,20 @@ static void panel_focus_handler(struct window *window,
     return;
   }
 
+  log_message("Panel focus 1 \n");
+
+
 
   if(panel->desktop->enable_autohide)
     shell_helper_move_surface (panel->desktop->helper,
       panel->wl_surface,
-      WAYWARD_NO_MOVE_X, global_desktop_height - panel->desktop->panel_height
+      WAYWARD_NO_MOVE_X, panel->output->height - panel->desktop->panel_height
     );
 
 
-  wl_list_for_each(launcher, &global_desktop->panel->launcher_list, link) {
+  log_message("Panel focus 1 \n");
+
+  wl_list_for_each(launcher, &panel->launcher_list, link) {
     if(!flag) {
       launcher->focused = 1;
       widget_schedule_redraw(launcher->widget);
@@ -628,7 +634,7 @@ panel_clock_redraw_handler(struct widget *widget, void *data)
 	cairo_text_extents(cr, string, &extents);
 	if (allocation.x > 0)
 		allocation.x +=
-			allocation.width - clock->panel->desktop->panel_spacing * 1.5 - extents.width;
+			allocation.width - global_desktop->panel_spacing * 1.5 - extents.width;
 	else
 		allocation.x +=
 			allocation.width / 2 - extents.width / 2;
@@ -729,7 +735,10 @@ panel_resize_handler(struct widget *widget,
     printf("Resizing panel \n");
   }
 
-	int x = panel->desktop->panel_spacing;
+	int x = global_desktop->panel_spacing;
+	if(panel->desktop->panel_left_padding > 0) {
+	  x = x + (panel->output->width * panel->desktop->panel_left_padding) / 100;
+	}
 	int y = 0;
 	int force_x = 0;
 	int w = panel->desktop->icon_size;
@@ -737,7 +746,7 @@ panel_resize_handler(struct widget *widget,
 
   int horizontal = panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP || panel->panel_position == WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
 	int pad_h = (height - panel->desktop->icon_size) / 2;
-	int first_pad_w = panel->desktop->panel_spacing;
+	int first_pad_w = global_desktop->panel_spacing;
   int count = 0;
 
   static int right_icons = 0;
@@ -756,7 +765,6 @@ panel_resize_handler(struct widget *widget,
   //printf("pad_h %d %d \n", height, pad_h);
 
   panel->desktop->right_icons = right_icons;
-//  pad_h = 0;
 
   if(!panel->allocation_set) {
 
@@ -922,10 +930,7 @@ panel_create(struct desktop *desktop, struct output *output)
 	window_set_title(panel->window, "panel");
 	window_set_user_data(panel->window, panel);
 
-  //TODO
-  //disable for now
-
-	window_set_keyboard_focus_handler(panel->window, panel_focus_handler);
+  window_set_keyboard_focus_handler(panel->window, panel_focus_handler);
 	window_set_key_handler(panel->window, panel_key_handler);
 	//widget_set_enter_handler(panel->widget, panel_enter_handler);
 	//widget_set_leave_handler(panel->widget, panel_leave_handler);
@@ -1817,13 +1822,22 @@ unlock_dialog_finish(struct task *task, uint32_t events)
 	unlock_dialog_destroy(desktop->unlock_dialog);
 	desktop->unlock_dialog = NULL;
 
-	shell_helper_set_panel (desktop->helper, desktop->panel->wl_surface);
+  //TODO
+  for(int i = 0; i < 20; i++) {
+    if(!desktop->panels[i])
+      break;
+    struct panel *panel = desktop->panels[i];
+	  shell_helper_set_panel (desktop->helper, panel->wl_surface);
 
-  if(desktop->enable_autohide)
-    shell_helper_move_surface (desktop->helper,
-      desktop->panel->wl_surface,
-      WAYWARD_NO_MOVE_X, global_desktop_height - desktop->panel_height
-    );
+	  if(desktop->enable_autohide)
+      shell_helper_move_surface (desktop->helper,
+        panel->wl_surface,
+        WAYWARD_NO_MOVE_X, panel->output->height - desktop->panel_height
+      );
+
+	}
+
+
 	printf("Unlocked \n");
 }
 
@@ -2062,14 +2076,19 @@ output_handle_mode(void *data,
 		   int refresh)
 {
 
-  if(width > global_desktop_width) {
-    global_desktop_width = width;
-  }
-  if(height > global_desktop_height) {
-    global_desktop_height = height;
-  }
+  struct output *output = data;
 
-  printf("Found output with WxH %d %d \n", global_desktop_width, global_desktop_height);
+  if(!(flags & WL_OUTPUT_MODE_CURRENT))
+    return;
+
+
+
+
+  output->width = width;
+  output->height = height;
+
+  printf("Found output with WxH %d %d \n", width, height);
+  log_message("Found output with WxH %d %d \n", width, height);
 
 }
 
@@ -2103,29 +2122,38 @@ static void
 output_init(struct output *output, struct desktop *desktop)
 {
 	struct wl_surface *surface;
+	static int first_done = 0;
 
 	if (desktop->want_panel) {
 		output->panel = panel_create(desktop, output);
 		surface = window_get_wl_surface(output->panel->window);
     output->panel->wl_surface = surface;
 
+    output->panel->output = output;
+
 		weston_desktop_shell_set_panel(desktop->shell,
 		  output->output, surface);
 
     shell_helper_set_panel (desktop->helper, surface);
 
-    printf("2 \n");
     //Set panel initial position
     if(!output->panel->wl_surface)
       exit(1);
 
     printf("4 \n");
 
-    if(!desktop->panel)
-      desktop->panel = output->panel;
+    for(int i = 0; i < 20; i++) {
+      if(!global_desktop->panels[i]) {
+        global_desktop->panels[i] = output->panel;
+        break;
+      }
+    }
 
-    shell_helper_bind_key_panel(desktop->helper, surface, desktop->seat, desktop->shell);
 
+    if(!first_done)
+      shell_helper_bind_key_panel(desktop->helper, surface, desktop->seat, desktop->shell);
+
+    first_done = 1;
 
 	}
 
@@ -2217,45 +2245,71 @@ void wayland_pointer_enter_cb(void *data,
 		wl_fixed_t sx, wl_fixed_t sy)
 {
 
-  if(!global_desktop || !global_desktop->panel || !global_desktop->enable_autohide)
+  if(!global_desktop->panels[0])
+    return;
+
+  if(!global_desktop || !global_desktop->panels[0] || !global_desktop->enable_autohide)
     return;
 
 
-  if(surface == global_desktop->panel->wl_surface) {
-    global_panel_in = 1;
-    if(global_desktop->enable_autohide)
+  for(int i = 0; i < 20; i++) {
+
+    if(!global_desktop->panels[i])
+      break;
+
+    struct panel *panel = global_desktop->panels[i];
+
+    log_message("1 surface %p 2 desktop %p i is %d \n", surface, panel->wl_surface, i);
+
+    if(surface == panel->wl_surface) {
+      global_panel_in = 1;
+
+      printf("Showing panel surface %d \n", i);
+      log_message("Showing panel surface %d %p %d \n", i, surface, panel->output->height);
       shell_helper_move_surface (global_desktop->helper,
-          global_desktop->panel->wl_surface,
-          WAYWARD_NO_MOVE_X, global_desktop_height - global_desktop->panel_height
+        panel->wl_surface,
+        WAYWARD_NO_MOVE_X, panel->output->height - global_desktop->panel_height
       );
+
+      break;
+    }
   }
+
 }
 //TODO fix without global_desktop
 void wayland_pointer_leave_cb(void *data,
 		struct wl_pointer *pointer, uint32_t serial, struct wl_surface *surface)
 {
-  if(!global_desktop || !global_desktop->panel
+  if(!global_desktop || !global_desktop->panels[0]
     || global_panel_in_y > WAYWARD_PANEL_LEAVE_BUG_Y
     || !global_desktop->enable_autohide
     )
     return;
 
-  if(surface == global_desktop->panel->wl_surface) {
-    global_panel_in = 0;
-    printf("Hiding panel surface \n");
-    shell_helper_move_surface (global_desktop->helper,
-        global_desktop->panel->wl_surface,
-        WAYWARD_NO_MOVE_X, global_desktop_height - 5
-    );
-    if(global_desktop->panel->clock_state == VOLUME_SHOWN) {
-      launch_volume(global_desktop->panel->volumeup_launcher);
-    } else if(global_desktop->panel->clock_state == SYSTEM_SHOWN) {
-      launch_system(global_desktop->panel->volumeup_launcher);
-    } else if(global_desktop->panel->clock_state == BRIGHTNESS_SHOWN) {
-      launch_brightness(global_desktop->panel->brightnessup_launcher);
-    }
+  for(int i = 0; i < 20; i++) {
+    if(!global_desktop->panels[i])
+      break;
+    struct panel *panel = global_desktop->panels[i];
 
-    window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
+    if(surface == panel->wl_surface) {
+      global_panel_in = 0;
+
+      log_message("Hiding panel surface %d %p %d \n", i, surface, panel->output->height);
+
+      shell_helper_move_surface (global_desktop->helper,
+          panel->wl_surface,
+          WAYWARD_NO_MOVE_X, panel->output->height - 5
+      );
+      if(panel->clock_state == VOLUME_SHOWN) {
+        launch_volume(panel->volumeup_launcher);
+      } else if(panel->clock_state == SYSTEM_SHOWN) {
+        launch_system(panel->volumeup_launcher);
+      } else if(panel->clock_state == BRIGHTNESS_SHOWN) {
+        launch_brightness(panel->brightnessup_launcher);
+      }
+
+      window_schedule_resize(panel->window, panel->output->width, panel->output->height);
+    }
   }
 }
 
@@ -2507,13 +2561,15 @@ int list_pcm_devices(sound_device devices[], snd_pcm_stream_t stream) {
 
                 //printf(devices[count].name, MAX_NAME_LEN, "hw:%d,%d \n", card, dev);
                 sprintf(devices[count].name, snd_ctl_card_info_get_name(card_info));
+                sprintf(devices[count].long_name, "%s %s", devices[count].name, snd_pcm_info_get_id(pcm_info));
 
-                printf("--------------- \n %d %s - %s - %s \n",
+                printf("--------------- \n %d %s - \n %s \n %s - %s \n",
                          card,
                          devices[count].name,
+                         devices[count].long_name,
                          snd_pcm_info_get_name(pcm_info),
                          snd_pcm_info_get_id(pcm_info)
-                         );
+                );
 
                 devices[count].card = card;
                 devices[count].device = dev;
@@ -2693,16 +2749,30 @@ static void setup_sound_cards (struct desktop *desktop) {
           if(mixer_name) {
 
             printf("Count: %d \n", sound_card_count);
-            for(int jj = 0; jj < sound_card_count; jj++) {
 
-              if(strcmp(devices[jj].name, name) == 0) {
+            for(int jj = 0; jj < sound_card_count; jj++) {
+              if(strcmp(devices[jj].long_name, name) == 0) {
                 card_id = devices[jj].card;
-                printf("0 - Card found: %d %s %d \n", card_id, name, devices[jj].card);
+                printf("0 - Card found with long name: %d %s %d \n", card_id, name, devices[jj].card);
                 break;
               }
             }
+            //Use short name if no long name supplied
+            if(card_id == -1) {
+              for(int jj = 0; jj < sound_card_count; jj++) {
+                if(strcmp(devices[jj].name, name) == 0) {
+                  card_id = devices[jj].card;
+                  printf("0 - Card found: %d %s %d \n", card_id, name, devices[jj].card);
+                  break;
+                }
+              }
+            }
 
-            printf("1 - Card found: %d hw:%d for %s \n", card_id, card_id, name);
+            if(card_id != -1) {
+              printf("Card found: %d hw:%d for %s \n", card_id, card_id, name);
+            } else {
+              printf("Card not found: %d hw:%d for %s \n", card_id, card_id, name);
+            }
 
             if(card_id > -1) {
               sprintf(card_dev, "hw:%d", card_id);
@@ -2949,7 +3019,7 @@ panel_battery_redraw_handler(struct widget *widget, void *data)
     - (right_icons * battery->panel->desktop->panel_spacing)
     - battery->panel->desktop->panel_spacing
     - padding_right;
-//	allocation.y = battery->panel->desktop->panel_height - battery->panel->desktop->panel_font_size;
+
 
   //TODO figure out why
   //For some reason, Cairo draws above y here
@@ -3119,7 +3189,7 @@ static void launch_system(struct panel_launcher *launcher) {
   widget_schedule_redraw(launcher->panel->reboot_launcher->widget);
   widget_schedule_redraw(launcher->panel->shutdown_launcher->widget);
   widget_schedule_redraw(launcher->panel->clock->widget);
-  window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
+  window_schedule_resize(launcher->panel->window, launcher->panel->output->width, global_desktop->panel_height);
 }
 
 static void panel_brightness_label_redraw_handler(struct widget *widget, void *data) {
@@ -3182,7 +3252,7 @@ panel_sound_card_label_button_handler(struct widget *widget,
     label->panel->desktop->sound_cards_count,
     global_desktop->mixer[label->panel->desktop->current_sound_card]
   );
-	window_schedule_resize(label->panel->desktop->panel->window, global_desktop_width, label->panel->desktop->panel_height);
+	window_schedule_resize(label->panel->window, label->panel->output->width, label->panel->desktop->panel_height);
   set_default_sound_card(label->panel->desktop->current_sound_card);
 }
 
@@ -3280,7 +3350,7 @@ panel_volume_label_button_handler(struct widget *widget,
     label->panel->desktop->sound_cards_count,
     global_desktop->mixer[label->panel->desktop->current_sound_card]
   );
-	window_schedule_resize(global_desktop->panel->window, global_desktop_width, global_desktop->panel_height);
+	window_schedule_resize(label->panel->window, label->panel->output->width, global_desktop->panel_height);
 }
 
 static void panel_volume_label_redraw_handler(struct widget *widget, void *data) {
@@ -3417,7 +3487,7 @@ static void launch_brightness(struct panel_launcher *launcher) {
   widget_schedule_redraw(launcher->panel->brightness_label->widget);
 
   widget_schedule_redraw(launcher->panel->clock->widget);
-  window_schedule_resize(launcher->panel->window, global_desktop_width, 50);
+  window_schedule_resize(launcher->panel->window, launcher->panel->output->width, 50);
 }
 
 static void launch_volume(struct panel_launcher *launcher) {
@@ -3514,7 +3584,7 @@ static void launch_volume(struct panel_launcher *launcher) {
   widget_schedule_redraw(launcher->panel->volume_label->widget);
 
   widget_schedule_redraw(launcher->panel->clock->widget);
-  window_schedule_resize(global_desktop->panel->window, global_desktop_width, 50);
+  window_schedule_resize(launcher->panel->window, launcher->panel->output->width, 50);
 }
 
 
@@ -4294,13 +4364,14 @@ parse_panel_position(struct desktop *desktop, struct weston_config_section *s)
 		desktop->panel_position = WESTON_DESKTOP_SHELL_PANEL_POSITION_LEFT;
 	} else if (strcmp(position, "right") == 0) {
 		desktop->panel_position = WESTON_DESKTOP_SHELL_PANEL_POSITION_RIGHT;
-	} else {
-		/* 'none' is valid here */
-		if (strcmp(position, "none") != 0)
-			fprintf(stderr, "Wrong panel position: %s\n", position);
+	} else if (strcmp(position, "none") != 0) {
+	  fprintf(stderr, "Wrong panel position: %s\n", position);
 		desktop->want_panel = 0;
+	} else {
+	  desktop->panel_position = WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM;
+	  desktop->want_panel = 1;
 	}
-	desktop->want_panel = 1;
+
 	free(position);
 }
 
@@ -4382,6 +4453,9 @@ int main(int argc, char *argv[])
 
   weston_config_section_get_string(s, "multiple-sound-cards", &desktop.multiple_sound_cards, NULL);
 
+	s = weston_config_get_section(desktop.config, "shell", NULL, NULL);
+	weston_config_section_get_int(s, "panel-left-padding", &desktop.panel_left_padding, 0);
+
 	if(desktop.icon_size >= 64) {
 	  desktop.icon_size = 64;
 	  desktop.panel_font_size = 24;
@@ -4397,6 +4471,7 @@ int main(int argc, char *argv[])
 	  desktop.panel_spacing = floor( (desktop.icon_size / 32) * 10 );
 	}
 
+  //TODO
 	desktop.panel_height = desktop.icon_size + 20;
 
 	parse_panel_position(&desktop, s);

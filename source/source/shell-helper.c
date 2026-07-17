@@ -391,12 +391,16 @@ shell_helper_move_surface(struct wl_client *client,
 		wl_resource_get_user_data(surface_resource);
 	struct weston_view *view;
 	struct weston_coord_global pos;
+	struct weston_coord_global pos1;
   struct weston_coord_surface offset;
 
 
 	view = container_of(surface->views.next, struct weston_view, surface_link);
 
 	if (!view)
+		return;
+
+	if (!surface->output)
 		return;
 
   //weston_log("Moving..  %d %d \n", x, y);
@@ -410,17 +414,21 @@ shell_helper_move_surface(struct wl_client *client,
     x = view->geometry.pos_offset.x;
 
   if(y == -191) {
-  	pos.c = weston_coord(x, view->geometry.pos_offset.y);
+  	pos1.c = weston_coord(x, view->geometry.pos_offset.y);
     offset = weston_coord_surface(x, 100, view->surface);
 	  weston_view_set_position_with_offset(view, pos, offset);
 	  weston_view_update_transform(view);
     weston_compositor_schedule_repaint(helper->compositor);
 	  return;
   } else {
-  	pos.c = weston_coord(x, y);
+  	pos1.c = weston_coord(x, y);
   }
 
-	weston_view_set_position(view, pos);
+  //pos = weston_coord_global_add(surface->output->pos, pos1);
+
+  weston_log("Surface position %d %d %d \n", x, y, surface->output->width);
+
+	weston_view_set_position(view, pos1);
 	weston_view_update_transform(view);
 	weston_compositor_schedule_repaint(helper->compositor);
 }
@@ -501,7 +509,7 @@ shell_helper_add_surface_to_layer(struct wl_client *client,
 	new_surface->output = existing_view->output;
 }
 
-
+#if 0
 static void
 panel_move_initial(
         struct weston_view *view,
@@ -512,13 +520,11 @@ panel_move_initial(
   pos.c = weston_coord(x, y);
 	weston_view_set_position(view, pos);
 	weston_view_update_transform(view);
-	//weston_compositor_schedule_repaint(helper->compositor);
+
 }
+#endif
 
 
-//This is necessary since Weston 13.0 it's not possible to change
-//initial position of the view if it was set on the first? configure
-//So we skip set position here.
 static void
 configure_panel(struct weston_surface *es, struct weston_coord_surface new_origin)
 {
@@ -527,11 +533,10 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 	struct weston_view *view;
   struct weston_coord_global offset;
 	struct desktop_shell *shell = sh_output->shell;
+	struct weston_coord_global pos;
 	static int initial = 0;
 
 	view = container_of(es->views.next, struct weston_view, surface_link);
-
-  struct weston_coord_global pos;
 
 	if (!weston_surface_is_mapped(es)) {
 	  weston_log("Moving panel configure .. \n", es->height);
@@ -541,6 +546,7 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 		assert(view);
 		weston_log("Moving panel configure 444 %d .. \n", es->height);
 		initial = 0;
+
 	}
 
   if (wl_list_empty(&view->layer_link.link)) {
@@ -548,11 +554,40 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 	}
 
   if(!initial) {
+
+  	switch (shell->panel_position) {
+    	case WESTON_DESKTOP_SHELL_PANEL_POSITION_TOP:
+    	case WESTON_DESKTOP_SHELL_PANEL_POSITION_LEFT:
+    		sh_output->panel_offset.c = weston_coord(0, 0);
+    		break;
+    	case WESTON_DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
+    		sh_output->panel_offset.c =
+    			weston_coord(0, output->height - es->height);
+    		break;
+    	case WESTON_DESKTOP_SHELL_PANEL_POSITION_RIGHT:
+    		sh_output->panel_offset.c =
+    			weston_coord(output->width - es->width, 0);
+    		break;
+    	default:
+    		sh_output->panel_offset.c =
+    			weston_coord(0, output->height - es->height);
+    		break;
+  	}
+
+
     initial = 1;
-    weston_log("Moving panel configure - initial .. \n");
-    panel_move_initial(view, 0, output->height - es->height);
+
+    weston_log("Moving panel configure - initial .. output widthxheight %dx%d \n",
+      output->width,
+      output->height
+      );
+    //panel_move_initial(view, 0, output->height - es->height);
+
+    pos = weston_coord_global_add(output->pos, sh_output->panel_offset);
+	  weston_view_set_position(view, pos);
   }
 }
+
 
 static void
 shell_helper_set_panel(struct wl_client *client,
@@ -567,13 +602,8 @@ shell_helper_set_panel(struct wl_client *client,
 	struct weston_view *view = container_of(surface->views.next,
 						struct weston_view,
 						surface_link);
-  struct weston_coord_surface tmp;
 
-	/* we need to save the panel's layer so we can use it later on, but
-	 * it hasn't yet been defined because the original surface configure
-	 * function hasn't yet been called. if we call it here we will have
-	 * access to the layer. */
-	tmp = weston_coord_surface(0, 0, surface);
+
 
 	//Since Weston 13, below would break autohide
 //	surface->committed(surface, tmp);
@@ -860,9 +890,22 @@ static void
 debug_binding(struct weston_keyboard *keyboard, const struct timespec *time, uint32_t key, void *data)
 {
   //struct weston_keyboard *keyboard = weston_seat_get_keyboard(panel_seat);
+  struct desktop_shell *shell = data;
+  struct weston_output *output = weston_shell_utils_get_focused_output(shell->compositor);
+  if(!output)
+    return;
+  weston_log("debug set 1 \n");
+
+  struct shell_output *sh_output;
+  sh_output = weston_output_get_shell_private(output);
+    weston_log("debug set 2 \n");
   panel_keyboard = keyboard;
+  if(!sh_output || !sh_output->panel_surface)
+    return;
+  weston_log("debug set 3 %p \n", sh_output->panel_surface);
   printf("panel_keyboard set \n");
-  weston_keyboard_set_focus(keyboard, data);
+  weston_keyboard_set_focus(keyboard, sh_output->panel_surface);
+  //weston_keyboard_set_focus(keyboard, gsurface);
 }
 
 
@@ -883,7 +926,8 @@ shell_helper_bind_key_panel(struct wl_client *client,
   global_desktop_shell = shell;
 
   struct shell_helper *helper = wl_resource_get_user_data(resource);
-  weston_compositor_add_key_binding(helper->compositor, KEY_E, MODIFIER_SUPER, debug_binding, panel_weston_surface);
+ // weston_compositor_add_key_binding(helper->compositor, KEY_E, MODIFIER_SUPER, debug_binding, panel_weston_surface);
+  weston_compositor_add_key_binding(helper->compositor, KEY_E, MODIFIER_SUPER, debug_binding, shell);
 
   weston_compositor_add_key_binding(helper->compositor, KEY_A, MODIFIER_SUPER, exposay_binding, shell);
   weston_compositor_add_key_binding(helper->compositor, KEY_L, MODIFIER_SUPER, exposay_binding, shell);
@@ -1486,7 +1530,7 @@ configure_input_panel(struct weston_surface *es, struct weston_coord_surface new
   	weston_view_set_position(view, pos);
   	weston_view_update_transform(view);
     weston_compositor_schedule_repaint(helper->compositor);
-   // panel_move_initial(view, 0, output->height - es->height);
+
   }
 }
 

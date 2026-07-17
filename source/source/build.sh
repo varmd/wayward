@@ -14,7 +14,7 @@ cd `dirname $0`
 mkdir -p o
 
 WAYWARD_CFLAGS="-std=c11 -pthread \
--I../../weston-${WESTON_VER}.0.0/include/ \
+-I../../src/weston-${WESTON_VER}.0.0/include/ \
 -I. \
 -I.. \
 -I../shared/ \
@@ -110,9 +110,8 @@ gcc ${WAYWARD_CFLAGS} xxtea/wayward-pincode.c \
   ${XXTEA_SOURCES} -o o/wayward-pincode
 
 WESTON_LIB="-lweston-$WESTON_VER"
-WESTON_LIB="-L../../weston-${WESTON_VER}.0.0/build/libweston/ -l:libweston-${WESTON_VER}.so"
+WESTON_LIB="-L../../src/weston-${WESTON_VER}.0.0/build/libweston/ -l:libweston-${WESTON_VER}.so"
 
-#ls -la ../../weston-${WESTON_VER}.0.0/build/libweston/libweston-${WESTON_VER}.so
 
 gcc -fzero-init-padding-bits=unions -fPIC -shared  ${WAYWARD_CFLAGS} ${GTK_LIBS} -I/usr/include/libdrm/  -lm ${WESTON_LIB} -o shell_helper.so \
    gen-protocol/weston-desktop-shell-code.c gen-protocol/shell-helper-protocol.c \

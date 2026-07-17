@@ -77,6 +77,7 @@ enum clock_state {
 
 typedef struct {
     char name[256];
+    char long_name[384];
     int card;
     int device;
     int init;
@@ -129,6 +130,7 @@ struct desktop {
   struct toytimer shm_timer;
 
   struct panel *panel;
+  struct panel *panels[30];
 
 	struct weston_config *config;
 	bool locking;
@@ -142,6 +144,8 @@ struct desktop {
 	struct input_panel *input_panel;
   struct wl_surface *input_panel_surface;
   int input_panel_shown;
+
+  int panel_left_padding;
 
   char *multiple_sound_cards;
   //char sound_card_names[10][50];
@@ -213,8 +217,9 @@ struct panel {
   enum clock_state clock_state;
 
 	uint32_t color;
-
 	struct desktop *desktop;
+
+	struct output *output;
 };
 
 struct background {
@@ -239,6 +244,9 @@ struct output {
 	int y;
 	struct panel *panel;
 	struct background *background;
+
+	int width;
+	int height;
 };
 
 struct panel_launcher {

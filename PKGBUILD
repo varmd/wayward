@@ -1,5 +1,5 @@
 pkgname=wayward
-pkgver=1.5.2
+pkgver=1.5.3
 pkgrel=11
 pkgdesc="wayward - fast desktop shell for wayland and weston"
 arch=('x86_64')
@@ -11,6 +11,7 @@ replaces=("weston")
 conflicts=("weston")
 depends=("ttf-droid" "alsa-lib")
 makedepends=( "fakeroot" "gcc")
+options=('!strip' '!debug' '!lto')
 
 source weston/PKGBUILD
 
@@ -21,8 +22,9 @@ prepare() {
 
 
   cd "$srcdir/"
-  rm -rf $srcdir/source
-  cp -r "$_source"/source .
+
+  ln -s ${_source}/source $PWD/source
+  #cp -r "$_source"/source .
 }
 
 build() {

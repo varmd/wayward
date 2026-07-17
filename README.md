@@ -152,13 +152,13 @@ It is possible to use sound card controls to switch to bluealsa for bluetooth he
 Due to buggy ALSA services, this setting should only be used when a USB or built-in bluetooth adapter is present
 and bluealsad and bluetoothd are working.
 
-   multiple-sound-cards=Sound card name,Device num,Mixer name|HDA ATI HDMI,9,PCM|bluealsa,0,0
+    multiple-sound-cards=Sound card name,Device num,Mixer name|HDA ATI HDMI,9,PCM|bluealsa,0,0
 
 ## Virtual keyboard
 
 Basic virtual keyboard was added in 1.5. It can be disabled by adding the following to the shell section.
 
-  virtual-keyboard=false
+    virtual-keyboard=false
 
 
 ## Changelog

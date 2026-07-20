@@ -18,7 +18,7 @@ depends+=('glibc'
          'seatd'
          )
 makedepends+=('ninja' 'meson' );
-source=("https://gitlab.freedesktop.org/wayland/weston/-/archive/15.0.0/weston-15.0.0.zip")
+source=("https://gitlab.freedesktop.org/wayland/weston/-/archive/16.0.0/weston-16.0.0.zip")
 sha256sums=("SKIP")
 
 
@@ -27,7 +27,7 @@ build_weston() {
   cd weston-*
 
   # fix accidental recording
-  patch -Np1 < ../../weston/weston-disable-capture-wcap.patch
+  #patch -Np1 < ../../weston/weston-disable-capture-wcap.patch
   # fix amd crash
   patch -Np1 < ../../weston/weston-disable-assert-on-frame-time.patch
 
@@ -40,7 +40,6 @@ build_weston() {
     -Dbackend-x11=false \
     -Dbackend-rdp=false \
     -Dshell-ivi=false \
-    -Dremoting=false \
     -Dbackend-x11=false \
     -Dsystemd=false \
     -Dshell-ivi=false \
@@ -51,11 +50,9 @@ build_weston() {
     -Dimage-webp=false \
     -Dtools= \
     -Ddemo-clients=false \
-    -Dpipewire=false \
     -Dsimple-clients= \
     -Ddemo-clients=false \
     -Dresize-pool=false \
-    -Dwcap-decode=false \
     -Dtest-junit-xml=false \
     -Ddoc=false \
     -Dtests=false \

@@ -204,6 +204,7 @@ struct desktop_shell {
 
 	struct wl_listener idle_listener;
 	struct wl_listener wake_listener;
+	struct wl_listener sleep_listener;
 	struct wl_listener transform_listener;
 	struct wl_listener resized_listener;
 	struct wl_listener destroy_listener;
@@ -261,7 +262,6 @@ struct desktop_shell {
 
 	bool allow_zap;
 	bool disallow_output_changed_move;
-
 	uint32_t binding_modifier;
 	enum animation_type win_animation_type;
 	enum animation_type win_close_animation_type;
@@ -548,6 +548,7 @@ configure_panel(struct weston_surface *es, struct weston_coord_surface new_origi
 		initial = 0;
 
 	}
+
 
   if (wl_list_empty(&view->layer_link.link)) {
 	  weston_view_move_to_layer(view, &shell->panel_layer.view_list);
@@ -1666,6 +1667,7 @@ shell_helper_input_key(struct wl_client *client,
   clock_gettime(CLOCK_REALTIME, &ts);
   static uint32_t serial;
   struct wl_display *display = NULL;
+  struct weston_key_event key_event;
 
 
 	if(!helper->first_keyboard)
@@ -1708,10 +1710,13 @@ shell_helper_input_key(struct wl_client *client,
 
       }
   }
-
-
-	weston_keyboard_send_key(helper->first_keyboard, &ts, key, WL_KEYBOARD_KEY_STATE_PRESSED);
-	weston_keyboard_send_key(helper->first_keyboard, &ts, key, WL_KEYBOARD_KEY_STATE_RELEASED);
+  clock_gettime(CLOCK_REALTIME, &key_event.base.ts);
+  key_event.key = key;
+  key_event.key_state = WL_KEYBOARD_KEY_STATE_PRESSED;
+  key_event.key_update_state = STATE_UPDATE_NONE;
+	weston_keyboard_send_key(helper->first_keyboard, &key_event);
+	key_event.key_state = WL_KEYBOARD_KEY_STATE_RELEASED;
+	weston_keyboard_send_key(helper->first_keyboard, &key_event);
 
   if(is_shift) {
   	wl_resource_for_each(_resource, &helper->first_keyboard->focus_resource_list) {
@@ -2168,7 +2173,7 @@ exposay_create_mask(struct desktop_shell *shell, int width) {
 	  blue/divider,
   1.0);
 
-  global_exposay.mask_surface = weston_surface_create(shell->compositor);
+  global_exposay.mask_surface = weston_surface_create(shell->compositor, NULL);
 
 	if (!weston_surface_is_mapped(global_exposay.mask_surface)) {
 		weston_surface_map(global_exposay.mask_surface);
@@ -2433,21 +2438,17 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output,
 
 static void
 exposay_touch_grab_down(struct weston_touch_grab *touch_grab,
-		     const struct timespec *time,
-		     int touch_id, struct weston_coord_global pos)
+		     const struct weston_touch_event *touch_event)
 {
 	struct desktop_shell *shell = global_exposay.shell;
 	struct weston_seat *seat = touch_grab->touch->seat;
 
-	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
-	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
-	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
-	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
-	printf("x y %d %d \n", (int)pos.c.x, (int)pos.c.y);
+	printf("touch grab down x y %d %d \n", (int)touch_event->pos.c.x, (int)touch_event->pos.c.y);
+
 
   exposay_pick(shell,
-	  (int)pos.c.x,
-	  (int)pos.c.y
+	  (int)touch_event->pos.c.x,
+	  (int)touch_event->pos.c.y
 	);
 
 
@@ -2464,10 +2465,8 @@ exposay_touch_grab_down(struct weston_touch_grab *touch_grab,
 
 static void
 exposay_touch_grab_up(struct weston_touch_grab *touch_grab,
-		   const struct timespec *time, int touch_id)
+		   const struct weston_touch_event *touch_event)
 {
-//	struct kiosk_shell_grab *shgrab =
-//		container_of(touch_grab, struct kiosk_shell_grab, touch_grab);
   struct desktop_shell *shell = global_exposay.shell;
 
 	if (touch_grab->touch->num_tp == 0)
@@ -2476,8 +2475,7 @@ exposay_touch_grab_up(struct weston_touch_grab *touch_grab,
 
 static void
 exposay_touch_grab_motion(struct weston_touch_grab *touch_grab,
-		       const struct timespec *time, int touch_id,
-		       struct weston_coord_global unused)
+		       const struct weston_touch_event *touch_event)
 {
 #if 0
 	struct kiosk_shell_grab *shgrab =
@@ -2528,8 +2526,7 @@ exposay_focus(struct weston_pointer_grab *grab)
 
 static void
 exposay_motion(struct weston_pointer_grab *grab,
-	       const struct timespec *time,
-	       struct weston_pointer_motion_event *event)
+  const struct weston_pointer_motion_event *event)
 {
 
 	struct desktop_shell *shell = global_exposay.shell;
@@ -2545,19 +2542,17 @@ exposay_motion(struct weston_pointer_grab *grab,
 }
 
 static void
-exposay_button(struct weston_pointer_grab *grab, const struct timespec *time,
-	       uint32_t button, uint32_t state_w)
+exposay_button(struct weston_pointer_grab *grab,
+  const struct weston_pointer_button_event *button_event)
 {
 	struct desktop_shell *shell = global_exposay.shell;
 	struct weston_seat *seat = grab->pointer->seat;
-	enum wl_pointer_button_state state = state_w;
+	enum wl_pointer_button_state state = button_event->button_state;
 
-
-
-  if (button == BTN_LEFT) {
+  if (button_event->button == BTN_LEFT) {
 	  exposay_activate(shell);
     exposay_set_state(shell, EXPOSAY_TARGET_SWITCH, seat);
-  } else if ( button == BTN_RIGHT &&  state == WL_POINTER_BUTTON_STATE_RELEASED) {
+  } else if ( button_event->button == BTN_RIGHT &&  state == WL_POINTER_BUTTON_STATE_RELEASED) {
     exposay_set_state(shell, EXPOSAY_TARGET_CLOSE, seat);
     exposay_set_state(shell, EXPOSAY_TARGET_CANCEL, seat);
     exposay_set_state(shell, EXPOSAY_TARGET_OVERVIEW, seat);
@@ -2582,8 +2577,7 @@ exposay_button(struct weston_pointer_grab *grab, const struct timespec *time,
 
 static void
 exposay_axis(struct weston_pointer_grab *grab,
-	     const struct timespec *time,
-	     struct weston_pointer_axis_event *event)
+	     const struct weston_pointer_axis_event *event)
 {
 }
 
@@ -2600,6 +2594,7 @@ exposay_frame(struct weston_pointer_grab *grab)
 static void
 exposay_pointer_grab_cancel(struct weston_pointer_grab *grab)
 {
+
 /*
 
 	struct desktop_shell *shell =
@@ -2638,17 +2633,22 @@ exposay_maybe_move(struct desktop_shell *shell, int row, int column)
 }
 
 static void
-exposay_key(struct weston_keyboard_grab *grab, const struct timespec *time,
-	    uint32_t key, uint32_t state_w)
+exposay_key(struct weston_keyboard_grab *grab,
+  const struct weston_key_event *key_event
+  #if 0
+const struct timespec *time,
+	    uint32_t key, uint32_t state_w
+#endif
+	    )
 {
 	struct weston_seat *seat = grab->keyboard->seat;
 	struct desktop_shell *shell = global_exposay.shell;
-	enum wl_keyboard_key_state state = state_w;
+	enum wl_keyboard_key_state state = key_event->key_state;
 
 	if (state != WL_KEYBOARD_KEY_STATE_RELEASED)
 		return;
 
-	switch (key) {
+	switch (key_event->key) {
 	case KEY_ESC:
 		exposay_set_state(shell, EXPOSAY_TARGET_CANCEL, seat);
 		break;

@@ -126,6 +126,14 @@ Icon sizes can be between 32 and 64.
 
     icon-size=new-size
 
+
+## Left padding
+
+To add left padding to the left of app icons edit weston.ini and add the following to the shell section.
+Padding number is a percentage of screen's width without the %.
+
+    panel-left-padding=40
+
 ## Pincodes
 
 Since 1.2.5 it is now possible to set numeric, up to six digit, pincodes for the lock screen.
@@ -162,6 +170,8 @@ Basic virtual keyboard was added in 1.5. It can be disabled by adding the follow
 
 
 ## Changelog
+
+1.6.0 - Update to Weston 16.0. Multi-monitor fixes. Add left padding for app icons.
 
 1.5.1 - Update to Weston 15.0 . Add initial touch support. Add initial virtual keyboard.
         Add initial multiple sound card control.
